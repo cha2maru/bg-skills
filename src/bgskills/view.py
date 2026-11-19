@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from .definition import Definition
-from .tools import rules_referencing
+from .tools import rules_referencing, rulings_for
 
 STAGES = ("exists", "count", "back", "face", "order")
 _DEFAULT = {s: "all" for s in STAGES}
@@ -122,6 +122,9 @@ def _item(d, state, obj, player, vis, owner, meaning):
             if uses:
                 it["uses"] = [{k: u.get(k) for k in ("id", "when", "text", "refs") if u.get(k)} for u in uses]
             it["rules"] = rules_referencing(d, obj)
+            js = rulings_for(d, it["rules"], obj)
+            if js:
+                it["rulings"] = js  # ルールの穴を埋める裁定（未決も）
         if knows and player is not None and face_down:
             it["note"] = "裏向きだが、あなたは中身を知っている"
     att = state["attached"].get(obj)

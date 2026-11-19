@@ -30,7 +30,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ルールの層（RUL-016。#31 を改めた）：
 - **ルールの文（`rules`）が正本**。エージェントもキーパーもまず文を読む。
 - **機械の層は、作品が選んで書いた分だけ**：条件（`require`・進行の区分と回数）、手順（`steps`・`on_start`・`on_end`・スタック）、終わり（`end_when` の結果・`scoring`）。参照・置き場・乱数・見え方は、どの作品でも機械で行う。
-- 機械の層と文が食い違ったら、**文が正しい**（定義の不具合として直す）。機械の層がないルールは、キーパーが文で裁く。`bg complexity` の `machine_layer` でルールごとの機械の層、`rules_text_only` で文だけのルールが分かる。
+- **裁定（`rulings`、RUL-017）は、文で決まらない点（ルールの穴）を決める**。1 件ごとに問い・裁定・理由・関わるルール・出典・重み（`authority`：official＞author＞designer＞keeper）・日付・見つかった対局を書く。決まっていない穴も `status: open` で書く（分かっている穴）。一般の原則は `principle: true`。sangeki の `wiki/notes/rulings.md` の書き方にならった。
+- 強さの順：ルールの文＞裁定＞機械の層。機械の層が文や裁定と食い違ったら、機械の層の不具合として直す。一次資料で明文が見つかったら、裁定のほうを直す。機械の層も裁定もない点は、キーパーが文で裁き、対局の裁定（`bg op` の ruling）に残す。`bg rulings <対局>` で定義へ持ち帰る候補が出る。`bg complexity` の `machine_layer` でルールごとの機械の層、`rules_text_only` で文だけのルールが分かる。
 - **形式を膨らませない**（RUL-016 の 6）：形式の項目の正本は `src/bgskills/schema.py`（CTR-F-001 r2、確定）。項目を足すのは、既存の項目では書けないと示せたときだけで、足すときは CTR-F-001 の版を上げる。新しい作品は、項目を足さずに書けるかの試験として使う。
 - プレイヤーに出すものは、局面なら `view.py`、記録なら `redact.py` を必ず通す。出口（コマンド・画面の API）を足したら `tests/test_leaks.py` に足す。
 - 機械の層をどれだけ強く効かせるかは対局ごとに選ぶ：警告だけ（既定）か、厳格モード（外れた行為を記録しない。`game.strict` で作品の既定にできる）。

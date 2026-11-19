@@ -1,7 +1,7 @@
 ---
 type: functional-contract
 id: CTR-F-001
-revision: 2
+revision: 3
 title: ゲーム定義の形式（bg-def）
 provider: /structure/CMP-0101.md
 format: file-format
@@ -117,6 +117,7 @@ implementation: []
 | metrics | 並び | | id・per・count・expr・needs・visible・badge | 名前つきの式 |
 | functions | 対応表 | | 名前 → params・expr | 名前つきの式（引数を持つ。どの式からも 名前(引数) で呼ぶ） |
 | terms | 辞書 | | word・text・refs | 原型：用語 |
+| rulings | 並び | | id・question・decision・reason・rules・refs・principle・status（decided・open）・authority（official・author・designer・keeper）・by・date・sources・found_in・supersedes・engine | ルールの派生：文で決まらない点（ルールの穴）を決める裁定（RUL-017） |
 | rules | 並び | ○ | id・type・text・refs | 原型：ルール（正本） |
 
 ## Validation Rules

@@ -123,6 +123,7 @@ def check_refs(d: Definition) -> list[dict]:
     for key in ("from", "to"):
         if fl.get("cycle") and fl["cycle"].get(key) not in sids:
             bad.append({"where": f"flow.cycle.{key}", "ref": fl["cycle"].get(key)})
+    bad += check_rulings(d)
     bad += check_exprs(d)
     from .schema import unknown_keys
     bad += unknown_keys(d.raw if hasattr(d, "raw") else d.data)  # 形式に無い項目（打ち間違い）
@@ -214,6 +215,68 @@ def _unknown_names(d, src: str) -> str | None:
                   and isinstance(n.args[0], ast.Constant) and isinstance(n.args[0].value, str)
                   and "{" not in n.args[0].value and n.args[0].value not in ids[n.func.id]})
     return f"定義にない名前: {', '.join(bad)}" if bad else None
+
+
+AUTHORITY = ["official", "author", "designer", "keeper"]  # 裁定の重み（上ほど強い。一次資料の明文が見つかれば、それが裁定より強い）
+
+
+def check_rulings(d: Definition) -> list[dict]:
+    """裁定の形：決まった裁定には decision、未決（status: open）には question。rules・refs・supersedes の参照先。"""
+    bad = []
+    rule_ids = {r["id"] for r in d.data.get("rules") or []}
+    ruling_ids = {r.get("id") for r in d.data.get("rulings") or []}
+    for i, r in enumerate(d.data.get("rulings") or []):
+        w = f"rulings[{i}]"
+        if not r.get("id"):
+            bad.append({"where": w, "ref": "裁定に id がない"})
+        if not r.get("question") and not r.get("principle"):
+            bad.append({"where": w, "ref": "裁定に question（問い）がない"})
+        if r.get("status", "decided") == "decided" and not r.get("decision"):
+            bad.append({"where": w, "ref": "決まった裁定に decision（裁定）がない（未決なら status: open）"})
+        if r.get("authority") and r["authority"] not in AUTHORITY:
+            bad.append({"where": f"{w}.authority", "ref": f"{r['authority']}（{'・'.join(AUTHORITY)} のどれか）"})
+        for x in r.get("rules") or []:
+            if x not in rule_ids:
+                bad.append({"where": f"{w}.rules", "ref": x})
+        for x in r.get("refs") or []:
+            if x not in d.index and x not in rule_ids:
+                bad.append({"where": f"{w}.refs", "ref": x})
+        if r.get("supersedes") and r["supersedes"] not in ruling_ids:
+            bad.append({"where": f"{w}.supersedes", "ref": r["supersedes"]})
+    return bad
+
+
+def rulings_for(d: Definition, rule_ids=(), target=None) -> list[dict]:
+    """ルール（か部品・種類）に関わる裁定（決まったもの・未決とも）。一般の原則（principle）は含めない。"""
+    out = []
+    targets = {target, *d.kind_chain(d.kind_of(target) or target)} if target else set()
+    for r in d.data.get("rulings") or []:
+        if set(r.get("rules") or []) & set(rule_ids) or targets & set(r.get("refs") or []):
+            out.append({k: r[k] for k in ("id", "question", "decision", "status", "authority") if k in r})
+    return out
+
+
+def rulings_report(d: Definition, session=None) -> dict:
+    """定義の裁定の一覧（決まった・未決・一般の原則）と、対局中の裁定のうち定義にまだ無いもの（持ち帰る候補。SPC-020）。"""
+    rs = d.data.get("rulings") or []
+    out = {"decided": [r["id"] for r in rs if r.get("status", "decided") == "decided" and not r.get("principle")],
+           "open": [{"id": r["id"], "question": r.get("question")} for r in rs if r.get("status") == "open"],
+           "principles": [{"id": r["id"], "decision": r.get("decision")} for r in rs if r.get("principle")]}
+    if session is not None:
+        decided = {(r.get("question") or "").strip() for r in rs if r.get("status", "decided") == "decided"}
+        opened = {(r.get("question") or "").strip(): r["id"] for r in rs if r.get("status") == "open"}
+        cand = []
+        for k, r in enumerate(session.state().get("rulings") or [], 1):
+            q = (r.get("question") or "").strip()
+            if q in decided:
+                continue
+            # 定義で未決の問いなら、その id を決まった裁定に書き換える候補（穴を埋める）
+            cand.append({"id": opened.get(q) or f"J-{session.dir.name}-{k}", "question": r.get("question"), "decision": r.get("decision"),
+                         **({"reason": r["reason"]} if r.get("reason") else {}), **({"rules": r["rules"]} if r.get("rules") else {}),
+                         "status": "decided", "authority": "keeper", "by": r.get("by", "keeper"),
+                         "date": (r.get("time") or "")[:10], "found_in": session.dir.name})
+        out["to_bring_back"] = cand  # 定義の rulings に貼れる形（了承を得てから書く。SPC-020）
+    return out
 
 
 def rules_referencing(d: Definition, target: str) -> list[str]:
@@ -460,6 +523,10 @@ def complexity(d: Definition) -> dict:
         for rid in m.get("refs") or []:
             if rid in layer:
                 layer[rid].append(f"metric {m['id']}")
+    for r in d.data.get("rulings") or []:
+        for rid in r.get("rules") or []:
+            if rid in layer:
+                layer[rid].append(f"ruling {r.get('id')}" + ("（未決）" if r.get("status") == "open" else ""))
     text_only = [rid for rid, xs in layer.items() if not xs]
     phases = sum(len(t.get("phases") or []) for t in (fl.get("turns") or {}).values())
     conds = sum(len(a.get("require") or []) + sum(len(p.get("require") or []) for p in a.get("params") or []) for a in acts)
@@ -473,6 +540,8 @@ def complexity(d: Definition) -> dict:
         "stages": len(fl.get("stages") or []), "phases": phases,
         "end_conditions": {"count": len(end), "with_result": sum(1 for c in end if c.get("winners") or c.get("losers") or c.get("draw")),
                            "timed": sum(1 for c in end if c.get("timing") not in (None, "now"))},
+        "rulings": {"count": len(d.data.get("rulings") or []), "open": sum(1 for r in d.data.get("rulings") or [] if r.get("status") == "open"),
+                    "principles": sum(1 for r in d.data.get("rulings") or [] if r.get("principle"))},
         "scoring": bool(fl.get("scoring")), "kinds": len(d.kinds), "parts": len(d.parts), "areas": len(d.areas),
     }
 

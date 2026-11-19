@@ -9,9 +9,6 @@ game:
   version: 2
   strict: true  # 手札は隠れた情報。外れた行為は記録しない
   players: {min: 2, max: 2}
-  open_questions:
-    - 打ち消しを打ち消せるか（今は打ち消しも呪文なので打ち消せる）
-    - 山札が尽きたら（今は引けないだけ。負けにするか）
 
 players:
   - {id: P1, name: 先手, color: '#7b3fa0'}
@@ -218,3 +215,31 @@ rules:
     refs: [card, casting]
   - {id: R4, type: action, text: 解呪・守りの紋は、相手の手番でもスタックに応じて唱えられる。打ち消された呪文は効かずに捨て札になる（払ったルーンは戻らない）。, refs: [dispel, ward]}
   - {id: R5, type: end, text: ダメージが 10 個たまったプレイヤーの負け。決めた手番数で終わらなければ引き分け。, refs: [wound]}
+
+rulings:  # ルールの穴を埋める裁定（RUL-017）。文（rules）が正本で、裁定は文で決まらない点を決める
+  - id: J1
+    principle: true
+    question: スタックに積んだ呪文が、解決するときに対象や前提を失っていたら
+    decision: 何もせずに外す（立ち消え）。払ったルーンは戻らない
+    reason: R4「打ち消された呪文は効かずに捨て札になる（払ったルーンは戻らない）」に合わせる
+    rules: [R3, R4]
+    authority: designer
+    date: 2026-11-20
+    engine: スタックの解決（行えなければ立ち消え）
+  - id: J2
+    question: 解呪で、相手の解呪（スタックの呪文）を打ち消せるか
+    decision: 打ち消せる。解呪も呪文なので、スタックにあれば対象になる
+    reason: R4 は対象を「スタックの呪文 1 つ」とだけ書いている
+    rules: [R4]
+    refs: [dispel]
+    authority: designer
+    date: 2026-11-20
+    found_in: bg-playtest（ルーン決闘、解呪の応酬）
+    engine: action cast-dispel（引数 spell の候補はスタックの呪文すべて）
+  - id: J3
+    question: 山札が尽きて引けないとき、負けにするか
+    status: open  # 未決：分かっている穴。今のエンジンは「引けないだけ」
+    rules: [R2, R5]
+    refs: [card]
+    found_in: game.open_questions から移した
+

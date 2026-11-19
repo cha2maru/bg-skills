@@ -539,3 +539,22 @@ rules:
     type: end
     text: サイドをすべて取ったプレイヤーの勝ち。場に精霊獣がいなくなったプレイヤー、手番の初めに山札から引けないプレイヤーの負け。
     refs: ["prizes-{player}"]
+
+rulings:  # ルールの穴を埋める裁定（RUL-017）
+  - id: J1
+    question: 自分のワザで相手のサイドを取り切ったのと同時に、相手の場に精霊獣がいなくなったら
+    decision: サイドを取り切った側の勝ち（結果は同じ）。終わりの条件は書いた順が優先
+    rules: [R8]
+    authority: designer
+    date: 2026-11-20
+    found_in: bg-playtest（精霊獣デュエル。知らせが 2 つ同時に出た）
+    engine: flow.end_when の並び
+  - id: J2
+    question: 手番の初めのどく・やけどで、両方のバトル場の精霊獣が同時にきぜつしたら
+    decision: 手番の人の精霊獣から順にきぜつさせ、それぞれ相手がサイドを取る
+    reason: R7 に順の定めがない。手番の初めの手順（on_start）の書き順に合わせる
+    rules: [R7]
+    authority: designer
+    date: 2026-11-20
+    engine: 手番の on_start の each（players() の順）
+

@@ -9,7 +9,7 @@ import difflib
 
 # 置き場所 → 項目（値の説明は CTR-F-001。ここは名前の正本）
 FIELDS: dict[str, set[str]] = {
-    "top": {"format", "game", "players", "teams", "kinds", "areas", "objects", "links", "groups", "actions", "rules", "terms",
+    "top": {"format", "game", "players", "teams", "kinds", "areas", "objects", "links", "groups", "actions", "rules", "rulings", "terms",
             "metrics", "flow", "functions", "progress", "table", "assets", "layout"},
     "game": {"id", "name", "summary", "version", "players", "open_questions", "sources", "strict"},
     "player": {"id", "name", "text", "color", "team", "for_each", "copies"},
@@ -39,6 +39,9 @@ FIELDS: dict[str, set[str]] = {
     "metric": {"id", "name", "per", "count", "sum", "expr", "needs", "visible", "badge", "refs"},
     "rule": {"id", "type", "text", "refs", "source", "seat"},
     "term": {"word", "text", "refs"},
+    # 裁定（ルールの穴を埋める。RUL-017。sangeki の wiki/notes/rulings.md を参考）
+    "ruling": {"id", "question", "decision", "reason", "rules", "refs", "principle", "status", "authority", "by", "date",
+               "sources", "found_in", "supersedes", "engine"},
     "function": {"params", "expr"},
     "progress": {"text", "start", "refs"},
 }
@@ -119,6 +122,8 @@ def unknown_keys(data: dict) -> list[dict]:
         check(r, "rule", f"rules[{i}]")
     for k, v in (data.get("terms") or {}).items():
         check(v, "term", f"terms.{k}")
+    for i, r in enumerate(data.get("rulings") or []):
+        check(r, "ruling", f"rulings[{i}]")
     for k, v in (data.get("functions") or {}).items():
         check(v, "function", f"functions.{k}")
     for k, v in (data.get("progress") or {}).items():
@@ -158,6 +163,7 @@ def json_schema() -> dict:
             "actions": {"type": "array", "items": action}, "flow": flow,
             "metrics": {"type": "array", "items": obj("metric")}, "rules": {"type": "array", "items": obj("rule")},
             "terms": {"type": "object", "additionalProperties": obj("term")},
+            "rulings": {"type": "array", "items": obj("ruling")},
             "functions": {"type": "object", "additionalProperties": obj("function")},
             "progress": {"type": "object", "additionalProperties": obj("progress")},
         }),

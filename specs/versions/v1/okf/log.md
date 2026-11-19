@@ -45,3 +45,4 @@
 - RUL-016 を記録（根本からの見直し）。RUL-001 #31 を改めた（ルールの層）。bg playstats・bg quiz を足した。
 - CTR-F-001 を r2 に改版（追加だけ：形式の正本を src/bgskills/schema.py に、RUL-016）し確定（stable）。CTR-F-002〜006 を確定。CTR-F-001 を指す参照を r2 に。未決の印のない要件 22 件を確定した（残り 47 件は要求か要件に【要確認】が残る）。
 - RUL-016 の 4〜6 を進めた（schema.py・bg schema、CTR-F-001 r2 確定、要件 22 件確定、redact.py と漏れの自動テスト、形式を膨らませない方針）。
+- RUL-017 を記録（定義の裁定）。CTR-F-001 を r3 に改版（追加だけ：rulings）。SPC-070 を起こした。

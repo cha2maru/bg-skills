@@ -328,3 +328,25 @@ rules:
     type: end
     text: 人狼が全員死んだら村人側（人狼以外）の勝ち。生きている人狼の数が、生きている村人側の数と同じかそれ以上になったら人狼の勝ち。終わったら全員の役職を公開する。
     refs: [werewolf]
+
+rulings:  # ルールの穴を埋める裁定（RUL-017）
+  - id: J1
+    principle: true
+    question: 同時に起きることの順（夜の襲撃と護衛、決選投票の同数など）を、ルールの文が決めていないとき
+    decision: 進行役（キーパー）が決め、決めたことを対局の裁定として残す（bg op の ruling）
+    reason: 人狼は進行役が裁く遊び。決めた裁定は、bg rulings で定義に持ち帰る
+    authority: designer
+    date: 2026-11-20
+  - id: J2
+    question: 決選投票でも同数のとき
+    decision: その日は誰も処刑しない
+    rules: [R8]
+    authority: designer
+    date: 2026-11-20
+    engine: action no-execution
+  - id: J3
+    question: 投票しない（棄権する）ことはできるか
+    status: open
+    rules: [R7]
+    found_in: bg-playtest（人狼。P6 が棄権したまま開票できた）
+

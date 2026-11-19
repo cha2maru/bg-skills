@@ -157,6 +157,8 @@ def main(argv=None):
     c.add_argument("--by", required=True)
     c.add_argument("--param", help="省くと全部の引数")
     c.add_argument("--arg", action="append", default=[], help="先に決めた引数（char=C01 など）")
+    c = sub.add_parser("rulings", help="定義の裁定（決まった・未決・一般の原則）と、対局中の裁定のうち定義に持ち帰る候補")
+    c.add_argument("target", help="定義のファイルか対局のフォルダ")
     c = sub.add_parser("schema", help="ゲーム定義の形式（JSON Schema）を書き出す。エディタの補完・エージェントの読み物（正本は src/bgskills/schema.py）")
     c = sub.add_parser("quiz", help="ルールの理解の小テストを作る（局面ごとに「行えるか」。正解はエンジンの判定。answers.yaml は別）")
     c.add_argument("definition")
@@ -206,8 +208,10 @@ def main(argv=None):
     a = p.parse_args(argv)
     try:
         if a.cmd == "check":
-            bad = check_refs(load(a.definition))
-            _out({"missing_refs": bad})
+            d = load(a.definition)
+            bad = check_refs(d)
+            opens = [r["id"] for r in d.data.get("rulings") or [] if r.get("status") == "open"]
+            _out({"missing_refs": bad, **({"open_rulings": opens} if opens else {})})  # 未決の裁定＝分かっている穴（誤りではない）
             return 1 if bad else 0
         if a.cmd == "expand":
             _out(load(a.definition, a.players).data)
@@ -363,6 +367,13 @@ def main(argv=None):
             _out({"ok": True, **({"warnings": s.last_warnings} if s.last_warnings else {}),
                   "stack": [{"n": e["n"], "action": e["action"], "by": e["by"]} for e in st.get("stack") or []],
                   **({"resolved": st["stack_done"][-1]} if a.cmd == "resolve" or not st.get("stack_passes") and st.get("stack_done") else {})})
+        elif a.cmd == "rulings":
+            from .tools import rulings_report
+            if Path(a.target).is_dir():
+                s = Session(a.target)
+                _out(rulings_report(s.defn, s))
+            else:
+                _out(rulings_report(load(a.target)))
         elif a.cmd == "schema":
             from .schema import json_schema
             print(json.dumps(json_schema(), ensure_ascii=False, indent=1))
