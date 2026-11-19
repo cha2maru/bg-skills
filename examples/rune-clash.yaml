@@ -97,7 +97,7 @@ actions:
     let:
       foe: seat(actor, 1)
     steps:
-      - if: "'{card}' in on('casting')"
+      - if: "card in on('casting')"
         do:
           - {op: move, obj: wound-pool, from: supply, to: "life-{foe}", n: 3}
       - {op: move, obj: "{card}", to: "discard-{actor}"}

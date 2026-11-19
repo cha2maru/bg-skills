@@ -39,3 +39,9 @@
 - RUL-013 を記録（スタック・キュー）。SPC-068 を起こし、CTR-F-001 にアクションの stack・during_stack、引数の stack、flow.stack、操作 stack・pass・resolve・cancel を足した（形式の追加だけ。版は据え置き）。
 - RUL-014 を記録（Pyxel のサンプル samples/pyxel/rune_clash.py）。
 - RUL-015 を記録（終わり方と複雑なルール）。SPC-069 を起こし、CTR-F-001 に end_when の winners・losers・draw・timing、flow.auto_end・scoring、手番・段階の on_end を足した（形式の追加だけ。版は据え置き）。
+
+## 2026-11-20
+
+- RUL-016 を記録（根本からの見直し）。RUL-001 #31 を改めた（ルールの層）。bg playstats・bg quiz を足した。
+- CTR-F-001 を r2 に改版（追加だけ：形式の正本を src/bgskills/schema.py に、RUL-016）し確定（stable）。CTR-F-002〜006 を確定。CTR-F-001 を指す参照を r2 に。未決の印のない要件 22 件を確定した（残り 47 件は要求か要件に【要確認】が残る）。
+- RUL-016 の 4〜6 を進めた（schema.py・bg schema、CTR-F-001 r2 確定、要件 22 件確定、redact.py と漏れの自動テスト、形式を膨らませない方針）。

@@ -7,7 +7,7 @@ provider: /structure/CMP-0102.md
 format: file-format
 thickness: thin
 elements: [対局の情報, 操作の記録, シナリオの写し]
-status: draft
+status: stable
 tags: []
 implementation: []
 ---

@@ -8,7 +8,7 @@ format: file-format
 thickness: thick
 elements: [局面の見え方, 意味つきの局面, 候補, 指標, 進行の要約, 操作の結果]
 external_users: [エージェント（bg コマンドの JSON を読む）]
-status: draft
+status: stable
 tags: []
 implementation: []
 ---

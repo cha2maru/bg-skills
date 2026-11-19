@@ -7,7 +7,7 @@ provider: /structure/CMP-0106.md
 format: openapi
 thickness: thin
 elements: [GET /api/def, GET /api/view, GET /api/log, GET /api/candidates, POST /api/op, POST /api/action]
-status: draft
+status: stable
 tags: []
 implementation: []
 ---

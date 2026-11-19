@@ -7,7 +7,7 @@ provider: /structure/CMP-0105.md
 format: ui
 thickness: thick
 elements: [OBJ-010501]
-status: draft
+status: stable
 tags: []
 ---
 

@@ -8,7 +8,7 @@ format: file-format
 thickness: thick
 elements: [Saved Object, サムネイルと面の画像]
 external_users: [Tabletop Simulator]
-status: draft
+status: stable
 tags: []
 implementation: []
 ---

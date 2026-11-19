@@ -1,14 +1,14 @@
 ---
 type: functional-contract
 id: CTR-F-001
-revision: 1
+revision: 2
 title: ゲーム定義の形式（bg-def）
 provider: /structure/CMP-0101.md
 format: file-format
 thickness: thick
 elements: [ゲーム定義, シナリオ]
 external_users: [ゲーム設計者（人の手）, エージェント（定義を書く・読む）]
-status: draft
+status: stable
 tags: [concept]
 implementation: []
 ---
@@ -16,6 +16,11 @@ implementation: []
 # CTR-F-001：ゲーム定義の形式（bg-def）
 
 プロダクトの中心の契約。エージェントが不足なく読めるゲームの定義（RUL-001 #25・#28）を、概念の形として定める。
+
+
+## 形式の正本（r2）
+
+項目の名前と置き場所の正本は `src/bgskills/schema.py`（FIELDS）。`bg check` は形式に無い項目を似た項目つきで指摘し、`bg schema` は JSON Schema を書き出す。この文書の表は値の意味の説明で、名前が食い違えば schema.py が正しい。r2 からは確定（stable）なので、項目を足すときも版を上げる（RUL-016：作品ごとに形式を膨らませない）。
 
 ## Concept Model
 
