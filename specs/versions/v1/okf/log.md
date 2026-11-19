@@ -10,3 +10,32 @@
 - RUL-001 に #31〜#35 を追記した。
 - RUL-001 に #36・#37 を追記した。
 - WSH-001〜006 を採用にし、REQ-001〜REQ-012、SPC-001〜SPC-024 を起こした（推奨案で任された。判断の記録は notes/breakdown/gates.md）。
+- 第一弾を実装した（src/bgskills、tests、examples）。判断は notes/impl-1/gates.md、レビューと課題は notes/impl-1/review.md。
+- RUL-001 に #38・#39 を追記し、WSH-007・WSH-008 を起こした（未整理）。
+- RUL-002 を記録し、WSH-009〜011 を起こした。WSH-007 を保留、WSH-008 を採用。REQ-013〜016、SPC-025〜037 を起こした。SPC-001・006・009・011・015 を r2 に改版（第一弾のレビュー C1〜C10 の反映。判断は notes/impl-2/gates.md）。
+- RUL-002 に #18〜#20 を追記し、WSH-012、REQ-017、SPC-038〜040 を起こした。
+- RUL-002 に #21〜#26 を追記し、WSH-013、REQ-018、SPC-041〜045 を起こした。
+- 第二弾を実装した（SPC-001・006・009・011・015 r2、SPC-025〜045）。判断は notes/impl-2/gates.md、レビューと課題は notes/impl-2/review.md。
+- RUL-003 を記録し、SPC-046〜048 を起こした（カタンの再現、手札の並び順）。
+- カタンの再現（local/catan.yaml）と手札の並び順に対応した（SPC-046〜048）。判断と課題は notes/impl-3/gates.md。
+- RUL-003 に #3・#4 を追記し、SPC-049 を起こした（表示する情報を選べる画面）。
+- RUL-003 に #5 を追記し、SPC-050（指標）を起こした。
+- RUL-003 に #6・#7 を追記した（進行の構造、再現できないものの洗い出し）。
+- 第三弾：エージェントの対局（カタン）の報告を受け、進行の構造（SPC-051）、条件と近傍（SPC-052）、表示の切り替え（SPC-049）、指標（SPC-050）ほかを実装。概念定義の再レビューを notes/concept-review.md に書いた。
+- RUL-004 を記録。カタンを仕上げ（SPC-053）、2 回目の対局のレビューを受けて SPC-055。惨劇RoopeR の再現（SPC-054）。WSH-014、REQ-019〜022 を起こし、SPC-049〜054 をつないだ。
+- 惨劇RoopeR の対局のレビュー（notes/impl-4/tl-review.md）を受けて SPC-056。REQ-023・024 を起こした。
+- RUL-005 を記録（古典のサンプル、プリミティブからの派生）。
+- 構造の設計：SYS-01、CMP-0101〜0109、CTR-F-001〜006、OBJ-010101〜010901 を起こし、SPC-001〜056 を契約につないだ（notes/arch/gates.md）。古典のサンプル（将棋・オセロ・チェス・麻雀）を足した。
+- RUL-006 を記録（惨劇コモンズの画像）。SPC-057 を起こし、CTR-F-001 に image・back_image・assets を足した（形式の追加だけ。版は据え置き）。
+- RUL-007 を記録（データボード）。SPC-058 を起こし、CTR-F-001 に flow の on_start、エリアの rect、種類の shape を足した（形式の追加だけ。版は据え置き）。
+- RUL-008 を記録（実装のレビューと改善）。不具合 5 件を直し、bg check に式・進行・入れ子の手順の確認を足した。SPC-053 の関数に seat を足した（版は据え置き）。判断は notes/review-5/gates.md。
+- RUL-009 を記録（発言・交渉の概念、ディプロマシー・人狼・花火の再現）。WSH-015、REQ-025・026、SPC-059〜061 を起こし、CTR-F-001 に say・talk・others・know の fields・書き込む状態・secret・show_state・folded・aspect・players の color を足した（形式の追加だけ。版は据え置き）。判断は notes/social/gates.md。
+- RUL-010 を記録（複雑なエリア形状、画面のスクリーンショット集）。SPC-062 を起こし、CTR-F-001 にエリアの poly・color を足した（形式の追加だけ。版は据え置き）。
+- RUL-011 を記録（カードの効果・ステータス、多人数・卓を広く使う表示）。精霊獣デュエル（examples/beast-duel.yaml）を作り、SPC-063・064 を起こし、CTR-F-001 にアクションの stepwise を足した（形式の追加だけ。版は据え置き）。
+- RUL-012 を記録（Kaggle のコンペの規約の調査）。精霊獣デュエルの言葉を替えたが、利用者の判断で元に戻した。コンペの提出エージェントは別のプロジェクト ~/workspace/pokemon-kaggle に作った。
+- SPC-065 を起こし（提案と合意）、CTR-F-001 に say の offer・reply_to と操作 answer を足した（形式の追加だけ。版は据え置き）。
+- SPC-066 を起こし（名前つきの式 functions）、CTR-F-001 に functions を足した（形式の追加だけ。版は据え置き）。チェスにチェックの指標と知らせを足した。
+- SPC-067 を起こした（局面の繰り返し repeats()）。チェス・将棋に繰り返しの知らせを足した。
+- RUL-013 を記録（スタック・キュー）。SPC-068 を起こし、CTR-F-001 にアクションの stack・during_stack、引数の stack、flow.stack、操作 stack・pass・resolve・cancel を足した（形式の追加だけ。版は据え置き）。
+- RUL-014 を記録（Pyxel のサンプル samples/pyxel/rune_clash.py）。
+- RUL-015 を記録（終わり方と複雑なルール）。SPC-069 を起こし、CTR-F-001 に end_when の winners・losers・draw・timing、flow.auto_end・scoring、手番・段階の on_end を足した（形式の追加だけ。版は据え置き）。
