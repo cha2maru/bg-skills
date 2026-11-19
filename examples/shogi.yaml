@@ -1,0 +1,172 @@
+format: bg-def/0.1
+game:
+  id: shogi
+  name: 将棋
+  summary: >-
+    2 人が交互に駒を 1 つ動かすか、持ち駒を打つ。取った駒は自分の持ち駒になる。相手の玉を詰ませた方が勝つ。
+  version: 1
+  players: {min: 2, max: 2}
+  open_questions:
+    - 打ち歩詰め・王手放置・持将棋の判定は自然文（R5・R6）だけで持つ。千日手は同じ局面の回数（repeats）で知らせる。
+
+players:
+  - {id: sente, name: 先手, text: 盤の下側（行 7〜9）から始める。前は上。}
+  - {id: gote, name: 後手, text: 盤の上側（行 1〜3）から始める。前は下。}
+
+kinds:
+  square:
+    base: area
+    text: 盤のマス。駒を 1 つまで置ける。
+    capacity: 1
+  stand:
+    base: area
+    text: 駒台。持ち駒を置く。誰でも見える。
+  piece:
+    base: object
+    text: >-
+      駒。どちらの駒かは持ち主ではなく向き（状態 side）で決まる。取られると向きを変えて相手の駒になる。
+    states:
+      side:
+        sente: {text: 先手の駒（上向き）。, show: {rotate: 0}}
+        gote: {text: 後手の駒（下向き）。, show: {rotate: 180}}
+  promotable:
+    base: piece
+    text: 成れる駒。成ると裏返す（裏の字の動きになる）。
+    states:
+      status:
+        normal: {text: 表（成っていない）。, show: {face: up}}
+        promoted: {text: 裏（成った）。, show: {face: down}}
+  king: {base: piece, name: 玉, text: 玉。8 方向に 1 マス。}
+  gold: {base: piece, name: 金, text: 金。前・斜め前・横・後ろに 1 マス。}
+  rook: {base: promotable, name: 飛, text: 飛車。縦横に何マスでも。成ると竜（斜めに 1 マスも）。}
+  bishop: {base: promotable, name: 角, text: 角。斜めに何マスでも。成ると馬（縦横に 1 マスも）。}
+  silver: {base: promotable, name: 銀, text: 銀。前・斜め前・斜め後ろに 1 マス。成ると金の動き。}
+  knight: {base: promotable, name: 桂, text: 桂。前に 2・横に 1 のマスへ（飛び越える）。成ると金の動き。}
+  lance: {base: promotable, name: 香, text: 香。前に何マスでも。成ると金の動き。}
+  pawn: {base: promotable, name: 歩, text: 歩。前に 1 マス。成ると金の動き（と金）。}
+
+areas:
+  - id: board
+    name: 盤
+    text: 9×9。マスは s{列}{行}。列 1 が先手から見て左（9 筋）、行 1 が後手の奥（一段目）。
+    visibility: {face: all}
+    layout: {grid: [9, 9], child_kind: square, child_id: "s{col}{row}", origin: 左上}
+  - id: "stand-{player}"
+    for_each: {player: players}
+    kind: stand
+    name: 駒台
+    owner: "{player}"
+    visibility: {face: all}
+
+table:
+  center: [board]
+  per_player: ["stand-{player}"]
+
+objects:
+  - {id: sK, kind: king, start: s59, start_state: {side: sente}}
+  - {id: gK, kind: king, start: s51, start_state: {side: gote}}
+  # 先手（行 9・8・7）
+  - {id: "sG{c}", kind: gold, for_each: {c: [4, 6]}, start: "s{c}9", start_state: {side: sente}}
+  - {id: "sS{c}", kind: silver, for_each: {c: [3, 7]}, start: "s{c}9", start_state: {side: sente}}
+  - {id: "sN{c}", kind: knight, for_each: {c: [2, 8]}, start: "s{c}9", start_state: {side: sente}}
+  - {id: "sL{c}", kind: lance, for_each: {c: [1, 9]}, start: "s{c}9", start_state: {side: sente}}
+  - {id: sR, kind: rook, start: s88, start_state: {side: sente}}
+  - {id: sB, kind: bishop, start: s28, start_state: {side: sente}}
+  - {id: "sP{c}", kind: pawn, for_each: {c: [1, 2, 3, 4, 5, 6, 7, 8, 9]}, start: "s{c}7", start_state: {side: sente}}
+  # 後手（行 1・2・3）
+  - {id: "gG{c}", kind: gold, for_each: {c: [4, 6]}, start: "s{c}1", start_state: {side: gote}}
+  - {id: "gS{c}", kind: silver, for_each: {c: [3, 7]}, start: "s{c}1", start_state: {side: gote}}
+  - {id: "gN{c}", kind: knight, for_each: {c: [2, 8]}, start: "s{c}1", start_state: {side: gote}}
+  - {id: "gL{c}", kind: lance, for_each: {c: [1, 9]}, start: "s{c}1", start_state: {side: gote}}
+  - {id: gR, kind: rook, start: s22, start_state: {side: gote}}
+  - {id: gB, kind: bishop, start: s82, start_state: {side: gote}}
+  - {id: "gP{c}", kind: pawn, for_each: {c: [1, 2, 3, 4, 5, 6, 7, 8, 9]}, start: "s{c}3", start_state: {side: gote}}
+
+actions:
+  - id: move
+    name: 駒を動かす（取る）
+    rule: R2
+    when: 自分の手番に、R2 か R3 のどちらか 1 回。
+    params:
+      - {name: piece, from: board, kind: piece, require: [{expr: "state(value, 'side') == actor", text: 自分の駒ではない}]}
+      - name: to
+        in: board
+        kind: square
+        require:
+          - {expr: "not on1(value) or state(on1(value), 'side') != actor", text: 自分の駒がある}
+          - expr: >-
+              any(value in (
+                  [x for dx, dy in R for r in [ray(f, dx, dy * fw)] for i, x in enumerate(r) if not any(on1(y) for y in r[:i])]
+                  + [step(f, dx, dy * fw) for dx, dy in S])
+                for f in [where(piece)] for fw in [1 if state(piece, 'side') == 'sente' else -1]
+                for k in [kind(piece)] for pr in [state(piece, 'status') == 'promoted']
+                for G in [[(0,-1),(1,-1),(-1,-1),(1,0),(-1,0),(0,1)]] for O in [[(1,0),(-1,0),(0,1),(0,-1)]] for X in [[(1,1),(1,-1),(-1,1),(-1,-1)]]
+                for R in [O if k == 'rook' else X if k == 'bishop' else [(0,-1)] if k == 'lance' and not pr else []]
+                for S in [O + X if k == 'king' else G if k == 'gold' or (pr and k in ('silver', 'knight', 'lance', 'pawn')) else
+                          X if k == 'rook' and pr else O if k == 'bishop' and pr else [(0,-1),(1,-1),(-1,-1),(1,1),(-1,1)] if k == 'silver' else
+                          [(1,-2),(-1,-2)] if k == 'knight' else [(0,-1)] if k == 'pawn' else []])
+            text: その駒の動きで届かない
+    steps:
+      - if: "on1(to)"
+        let: {cap: "on1(to)"}
+        do:
+          - {op: move, obj: "{cap}", to: "stand-{actor}"}
+          - {op: set, obj: "{cap}", field: side, value: "{actor}"}
+          - if: "state(cap, 'status') == 'promoted'"
+            do:
+              - {op: set, obj: "{cap}", field: status, value: normal}
+      - {op: move, obj: "{piece}", to: "{to}"}
+  - id: drop
+    name: 持ち駒を打つ
+    rule: R3
+    when: 自分の手番に、R2 か R3 のどちらか 1 回。
+    params:
+      - {name: piece, from: "stand-{actor}", kind: piece, pick: first}
+      - name: to
+        in: board
+        kind: square
+        require:
+          - {empty: true, text: 駒がある}
+          - {expr: "kind(piece) != 'pawn' or not any(kind(p) == 'pawn' and state(p, 'side') == actor and state(p, 'status') != 'promoted' and pos(where(p))[0] == pos(value)[0] for p in parts_in('board'))", text: 二歩（同じ列に自分の成っていない歩がある）}
+          - {expr: "kind(piece) not in ('pawn', 'lance', 'knight') or pos(value)[1] not in ([0, 1] if kind(piece) == 'knight' else [0]) if actor == 'sente' else kind(piece) not in ('pawn', 'lance', 'knight') or pos(value)[1] not in ([7, 8] if kind(piece) == 'knight' else [8])", text: 行き所のない駒}
+    steps:
+      - {op: move, obj: "{piece}", to: "{to}"}
+  - id: promote
+    name: 成る
+    rule: R4
+    when: 動かした駒が、敵陣（相手側の 3 段）に入る・出る・中で動いたとき、その手の続きとして。
+    params:
+      - {name: piece, from: board, kind: promotable, require: [{expr: "state(value, 'side') == actor and state(value, 'status') != 'promoted' and pos(where(value))[1] in ([0, 1, 2] if actor == 'sente' else [6, 7, 8])", text: 敵陣にいる自分の成っていない駒ではない（敵陣から出た手は自然文 R4 で判断）}]}
+    steps:
+      - {op: set, obj: "{piece}", field: status, value: promoted}
+  - id: finish
+    name: 終了する
+    rule: R6
+    params:
+      - {name: winner, players: true}
+    steps:
+      - {op: end, winner: "{winner}"}
+
+flow:
+  stages:
+    - {id: main, name: 対局, order: seats, turn: main}
+  turns:
+    main:
+      phases:
+        - {id: move, name: 指す, main: [move, drop], max: 1, required: true, auto: true}
+        - {id: after, name: 成り, main: [promote], max: 1, auto: true}
+      reactions:
+        - {action: finish}
+  signals:
+    - {expr: "repeats() >= 4", text: "同じ局面が 4 回目（千日手。引き分けか、連続王手なら王手側の負け。R5）"}
+
+metrics:
+  - {id: in-hand, name: 持ち駒, badge: true, per: player, count: {in: "stand-{player}"}}
+
+rules:
+  - {id: R1, type: setup, text: 標準の初期配置（平手）。先手から指す。, refs: [board, piece]}
+  - {id: R2, type: turn, text: 盤上の自分の駒を 1 つ、その駒の動きで動かす。行き先の相手の駒は取り、向きを変えて自分の駒台に置く（成っていれば表に戻す）。, refs: [piece, "stand-{player}"]}
+  - {id: R3, type: turn, text: 持ち駒を 1 つ、空いたマスに打つ。二歩・行き所のない駒・打ち歩詰めは禁じ手。打った手番には成れない。, refs: [stand, pawn]}
+  - {id: R4, type: action, text: 動かした駒が敵陣に入る・敵陣の中で動く・敵陣から出るとき、成ってよい。行き所がなくなる歩・香・桂は必ず成る。, refs: [promotable]}
+  - {id: R5, type: always, text: 王手を放置する手、自分の玉を取られる位置へ動かす手は指せない。同一局面 4 回（千日手）は引き分け（連続王手の千日手は王手側の負け）。, refs: [king]}
+  - {id: R6, type: end, text: 相手の玉を詰ませた方の勝ち。投了も同じ。, refs: [king, R5]}

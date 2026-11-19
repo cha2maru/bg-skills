@@ -1,0 +1,259 @@
+format: bg-def/0.1
+game:
+  id: kagaribi
+  name: かがり火（架空のゲーム）
+  summary: >-
+    手札の薪カードを自分の火に積み、山札が尽きたときに火の薪の数値の合計が
+    最も大きい人が勝つ。風カードは、手札から使えば相手の火を崩し、
+    自分の火に差し込めば守りになる。
+  version: 1
+  players: {min: 2, max: 4}
+  open_questions:
+    - 守りが付いた薪が、風以外の理由で火から取り除かれたとき、守りはどうなるか（今のルールでは起きないが、拡張で起きうる）。
+
+players:
+  - id: "P{n}"
+    for_each: {n: [1, 2, 3, 4]}     # 実際の人数分だけ使う
+    name: "プレイヤー{n}"
+    text: 全員同じ立場。手番は P1 から番号順に回る。
+
+kinds:
+  card:
+    base: object
+    text: 表と裏がある札。裏の絵柄はすべて同じで、裏からは種類が分からない。
+    states:                          # 値ごとに意味（text）と表示方法（show：回転・表裏）を分けて書く
+      facing:
+        up: {text: 表向き。表の内容が見える（誰に見えるかはエリアの公開範囲による）。, show: {face: up}}
+        down: {text: 裏向き。表の内容は見えない。, show: {face: down}}
+      turn:
+        upright: {text: 縦向き。ふつうの置き方。, show: {rotate: 0}}
+        sideways: {text: 横向き。風が守りとして差し込まれていることを示す（R5）。, show: {rotate: 90}}
+    attributes:
+      title: {type: text, text: カードの名前。}
+  wood:
+    base: card
+    text: 薪。火に積むと、数値が得点になる。
+    attributes:
+      value: {type: number, text: 1〜6 の数値。}
+  wind:
+    base: card
+    text: 風。使い方で働きが変わる。
+    uses:
+      - id: blow
+        when: 手札から使う
+        text: ほかのプレイヤーの火を崩す。
+        refs: [R4]
+      - id: guard
+        when: 自分の火の薪の下に、横向きで差し込まれている間
+        text: その薪を風から1回守る。この状態の風を「守り」と呼ぶ。
+        refs: [R5, guard]
+  pile:
+    base: area
+    text: カードを重ねて置く場所。中のカードは下から上への順番を持つ。
+    ordered: true
+
+areas:
+  - id: deck
+    kind: pile
+    name: 山札
+    text: これから引くカード。裏向き。
+    visibility: {exists: all, count: all, face: none, order: none}
+  - id: discard
+    kind: pile
+    name: 捨て札
+    text: 使った・捨てたカード。表向き。
+    visibility: {count: all, face: all, order: all}
+    on_enter: {facing: up}           # 入ったカードは表向きになる
+  - id: "player-{player}"
+    for_each: {player: players}
+    name: プレイヤーエリア
+    owner: "{player}"
+    text: そのプレイヤーの前の場所。火（場）と手札がある。
+    areas:                           # 中央に近い順
+      - id: "fire-{player}"
+        kind: pile
+        name: 火
+        owner: "{player}"
+        text: 持ち主が積んだ薪と、差し込んだ守り。表向き。
+        visibility: {count: all, face: all, order: all}
+      - id: "hand-{player}"
+        name: 手札
+        owner: "{player}"
+        text: 持ち主がこれから使えるカード。
+        visibility: {count: all, face: owner}
+
+table:                               # 卓の配置。山札と捨て札は中央、各プレイヤーは席に（2 人なら対面）
+  center: [deck, discard]
+  per_player: ["player-{player}"]   # 席に置くエリア
+
+objects:
+  - id: "W{value}-{copy}"
+    kind: wood
+    for_each: {value: [1, 2, 3, 4, 5, 6]}
+    copies: 3
+    attributes: {title: "薪 {value}", value: "{value}"}
+    start: deck
+    start_state: {facing: down}
+  - id: "N{copy}"
+    kind: wind
+    copies: 6
+    attributes: {title: 風}
+    start: deck
+    start_state: {facing: down}
+
+progress:
+  active: {text: 手番のプレイヤー。}
+  step: {text: 手番の中の段階。draw（引く前）か act（行為を選ぶ）。, refs: [R2]}
+
+actions:                             # ルールに結びついた操作の手順。合法かどうかは判定しない（いつ行えるかは when の文）
+  - id: setup
+    name: 準備する（箱から）
+    rule: R1
+    when: 対局の初めに 1 回。箱から始めた対局で使う。
+    steps:
+      - {op: gather, from: box, to: deck, kind: card, facing: down}
+      - {op: shuffle, area: deck}
+      - {op: move, obj: "top:deck", to: "hand-{player}", each: players, times: 3}
+      - {op: progress, key: active, value: P1}
+      - {op: progress, key: step, value: draw}
+  - id: draw
+    name: 山札から 1 枚引く
+    rule: R2
+    when: 手番の初めに 1 回。
+    steps:
+      - {op: move, obj: "top:deck", to: "hand-{actor}"}
+  - id: stoke
+    name: 薪を火に置く
+    rule: R3
+    when: 引いた後、R3〜R6 のどれか 1 つとして。
+    params:
+      - {name: card, from: "hand-{actor}", kind: wood}
+    steps:
+      - {op: move, obj: "{card}", to: "fire-{actor}", facing: up}
+  - id: guard
+    name: 風を守りとして差し込む
+    rule: R5
+    when: 引いた後、R3〜R6 のどれか 1 つとして。差し込むのは火の一番上の薪の下。
+    params:
+      - {name: card, from: "hand-{actor}", kind: wind}
+      - {name: wood, from: "fire-{actor}", kind: wood}
+    steps:
+      - {op: attach, obj: "{card}", to: "{wood}"}
+      - {op: set, obj: "{card}", field: facing, value: up}
+      - {op: set, obj: "{card}", field: turn, value: sideways}
+  - id: blow-guard
+    name: 風で相手の守りを飛ばす
+    rule: R4
+    when: 相手の火の一番上の薪に守りが付いているとき。
+    params:
+      - {name: card, from: "hand-{actor}", kind: wind}
+      - {name: guard, kind: wind}
+    steps:
+      - {op: move, obj: "{card}", to: discard, facing: up}
+      - {op: move, obj: "{guard}", to: discard, facing: up}
+  - id: blow-wood
+    name: 風で相手の薪を飛ばす
+    rule: R4
+    when: 相手の火の一番上の薪に守りが付いていないとき。
+    params:
+      - {name: card, from: "hand-{actor}", kind: wind}
+      - {name: wood, kind: wood}
+    steps:
+      - {op: move, obj: "{card}", to: discard, facing: up}
+      - {op: move, obj: "{wood}", to: discard, facing: up}
+  - id: end-turn
+    name: 手番を終える
+    rule: R2
+    when: R3〜R6 のどれか 1 つを行った後。手番は次の番号のプレイヤーへ（進行の構造の順）。
+    steps:
+      - {op: advance, to: turn}
+      - {op: progress, key: step, value: draw}
+  - id: finish
+    name: 終了する（勝者を記録）
+    rule: R8
+    when: 手番の初めに山札が 0 枚のとき。火の薪の数値の合計が最も大きい人が勝つ。
+    params:
+      - {name: winner, players: true}
+    steps:
+      - {op: end, winner: "{winner}"}
+  - id: discard
+    name: 手札を 1 枚捨てる
+    rule: R6
+    when: 引いた後、R3〜R6 のどれか 1 つとして。
+    params:
+      - {name: card, from: "hand-{actor}"}
+    steps:
+      - {op: move, obj: "{card}", to: discard, facing: up}
+
+flow:                                # 進行の構造（段階 → 手番 → フェーズ）
+  stages:
+    - {id: setup, name: 準備, from_box_only: true, actions: [setup]}
+    - {id: main, name: 本番, order: seats, turn: main}
+  turns:
+    main:
+      phases:
+        - {id: draw, name: 引く, main: [draw], max: 1, required: true}
+        - {id: act, name: 行為, main: [stoke, guard, blow-guard, blow-wood, discard], max: 1, required: true}
+      free:
+        - {action: end-turn}
+      reactions:
+        - {action: finish}
+
+metrics:                             # 局面から数えて出す値
+  - {id: fire-total, name: 火の合計, badge: true, per: player, count: {kind: wood, in: "fire-{player}", sum_attr: value}, refs: [R8]}
+  - {id: hand-size, name: 手札の枚数, per: player, count: {in: "hand-{player}"}, needs: count}
+  - {id: deck-size, name: 山札の枚数, count: {in: deck}, needs: count, refs: [R8]}
+
+terms:
+  guard:
+    word: 守り
+    text: 火の薪の下に横向きで差し込まれた風。差し込まれた薪に付いている。
+    refs: [wind, R5]
+  top-wood:
+    word: 火の一番上の薪
+    text: 火にある薪のうち一番上のもの。守りは数えない。
+    refs: [wood]
+
+rules:
+  - id: R1
+    type: setup
+    text: >-
+      全カード（薪18枚・風6枚）を裏向きにして切り、山札にする。
+      各プレイヤーは山札の上から3枚を引いて手札にする。最初の手番は P1。
+  - id: R2
+    type: turn
+    text: >-
+      手番のプレイヤーは、まず山札の一番上を1枚引いて手札に加える。
+      その後、R3・R4・R5・R6 のどれか1つを必ず行う。行ったら手番は次の番号のプレイヤーに移る。
+    refs: [deck, "hand-{player}"]
+  - id: R3
+    type: action
+    text: 手札の薪を1枚、自分の火の一番上に表向き・縦向きで置く。
+    refs: [wood, "fire-{player}"]
+  - id: R4
+    type: action
+    text: >-
+      手札の風を1枚、表向きで捨て札に置き、ほかのプレイヤーを1人選ぶ。
+      その人の火の一番上の薪に守りが付いていれば、その守りを捨て札に置く（薪は残る）。
+      守りが付いていなければ、その薪を捨て札に置く。火に薪がない人は選べない。
+    refs: [wind, guard, top-wood, discard]
+  - id: R5
+    type: action
+    text: >-
+      手札の風を1枚、自分の火の一番上の薪の下に表向き・横向きで差し込む。
+      その風はその薪の守りになる。すでに守りが付いた薪には差し込めない。
+    refs: [wind, guard, top-wood]
+  - id: R6
+    type: action
+    text: 手札のカードを1枚、表向きで捨て札に置く。
+    refs: [discard]
+  - id: R7
+    type: always
+    text: 捨て札は、誰でもいつでも全部めくって見てよい。手札の枚数に上限はない。
+    refs: [discard]
+  - id: R8
+    type: end
+    text: >-
+      手番の初めに山札が0枚なら、ゲームは終わる。
+      各プレイヤーの火の薪の数値を合計し、最も大きい人が勝つ。同点の人はみな勝ち。
+    refs: [deck, wood]

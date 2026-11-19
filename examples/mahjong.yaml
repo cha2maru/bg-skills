@@ -1,0 +1,212 @@
+format: bg-def/0.1
+game:
+  id: mahjong
+  name: 麻雀（リーチ麻雀の 1 局）
+  summary: >-
+    4 人が牌を 1 枚引いて 1 枚捨てることを繰り返し、14 枚で和了の形（4 面子 1 雀頭など）を先に作った人がその局を和了る。
+    この定義は 1 局の進行と牌の置き場までを扱い、役と点数の計算は自然文（R7）に残す。
+  version: 1
+  players: {min: 4, max: 4}
+  open_questions:
+    - 役・符・点数の計算、流局時の聴牌料、局の連続（親の移動・本場）は自然文だけで持つ。
+
+players:
+  - {id: E, name: 東家, text: 親。最初に 14 枚目を引く。}
+  - {id: S, name: 南家}
+  - {id: W, name: 西家}
+  - {id: N, name: 北家}
+
+kinds:
+  tile:
+    base: object
+    text: 牌。表の柄（種類 suit と数 rank）は表向きのときだけ見える。
+    states:
+      facing:
+        up: {text: 表向き。, show: {face: up}}
+        down: {text: 裏向き。, show: {face: down}}
+      turn:
+        upright: {text: 縦向き。, show: {rotate: 0}}
+        sideways: {text: 横向き。リーチ宣言の捨て牌、鳴いた牌（誰から鳴いたか）を示す。, show: {rotate: 90}}
+    attributes:
+      suit: {type: text, text: m（萬子）・p（筒子）・s（索子）・z（字牌）。}
+      rank: {type: number, text: 数牌は 1〜9。字牌は 1〜7（東南西北白發中）。}
+  row:
+    base: area
+    text: 牌を並べる場所。並び順に意味がある。
+    ordered: true
+  stick:
+    base: object
+    text: リーチ棒（1000 点）。
+
+areas:
+  - id: wall
+    kind: row
+    name: 山
+    text: ツモる牌。裏向き。上から引く。
+    visibility: {exists: all, count: all, face: none, order: none}
+  - id: dead-wall
+    kind: row
+    name: 王牌
+    text: 嶺上牌とドラ表示牌の 14 枚。ドラ表示牌だけ表向き。
+    visibility: {count: all, face: all, order: all}
+  - id: "seat-{player}"
+    for_each: {player: players}
+    name: 席
+    owner: "{player}"
+    areas:
+      - id: "hand-{player}"
+        kind: row
+        name: 手牌
+        owner: "{player}"
+        visibility: {count: all, face: owner}
+      - id: "river-{player}"
+        kind: row
+        name: 河
+        owner: "{player}"
+        text: 捨て牌。表向き、捨てた順。
+        visibility: {count: all, face: all, order: all}
+        on_enter: {facing: up}
+      - id: "melds-{player}"
+        kind: row
+        name: 鳴いた面子
+        owner: "{player}"
+        visibility: {count: all, face: all, order: all}
+        on_enter: {facing: up}
+      - id: "riichi-{player}"
+        name: リーチ棒の置き場
+        owner: "{player}"
+        visibility: {face: all}
+  - id: sticks
+    name: 点棒箱（リーチ棒）
+    visibility: {face: all}
+
+table:
+  center: [wall, dead-wall, sticks]
+  per_player: ["seat-{player}"]
+
+objects:
+  - {id: "{s}{r}-{copy}", kind: tile, for_each: {s: [m, p, s], r: [1, 2, 3, 4, 5, 6, 7, 8, 9]}, copies: 4, attributes: {suit: "{s}", rank: "{r}", title: "{r}{s}"}, start: box}
+  - {id: "z{r}-{copy}", kind: tile, for_each: {r: [1, 2, 3, 4, 5, 6, 7]}, copies: 4, attributes: {suit: z, rank: "{r}", title: "{r}z"}, start: box}
+  - {id: "stick-{n}", kind: stick, for_each: {n: [1, 2, 3, 4]}, start: sticks}
+
+actions:
+  - id: setup
+    name: 局の準備（洗牌・配牌・ドラ表示）
+    rule: R1
+    when: 局の初めに 1 回。
+    steps:
+      - {op: gather, from: box, to: wall, kind: tile, facing: down}
+      - {op: shuffle, area: wall}
+      - {op: move, obj: "top:wall", to: dead-wall, times: 14}
+      - {op: flip, obj: "bottom:dead-wall"}
+      - {op: move, obj: "top:wall", to: "hand-{player}", each: players, times: 13}
+  - id: draw
+    name: ツモる
+    rule: R2
+    params: []
+    steps:
+      - {op: move, obj: "top:wall", to: "hand-{actor}"}
+  - id: discard
+    name: 打牌する
+    rule: R2
+    params:
+      - {name: tile, from: "hand-{actor}", kind: tile}
+    steps:
+      - {op: move, obj: "{tile}", to: "river-{actor}", facing: up}
+  - id: riichi
+    name: リーチして打牌する
+    rule: R5
+    require:
+      - {expr: "not count_in('melds-' + actor) and not count_in('riichi-' + actor)", text: 鳴いている・すでにリーチしている}
+    params:
+      - {name: tile, from: "hand-{actor}", kind: tile}
+    steps:
+      - {op: move, obj: "{tile}", to: "river-{actor}", facing: up}
+      - {op: set, obj: "{tile}", field: turn, value: sideways}
+      - {op: move, obj: "top:sticks", to: "riichi-{actor}"}
+  - id: pon
+    name: ポン
+    rule: R3
+    when: ほかの人が打牌した直後。同じ牌を 2 枚持っているとき。
+    params:
+      - {name: giver, players: true, require: [{expr: "value != actor", text: 自分の捨て牌}]}
+      - {name: t1, from: "hand-{actor}", kind: tile}
+      - {name: t2, from: "hand-{actor}", kind: tile, require: [{expr: "value != t1 and attr(value, 'suit') == attr(t1, 'suit') and attr(value, 'rank') == attr(t1, 'rank')", text: 1 枚めと同じ牌ではない}]}
+    steps:
+      - let: {taken: "on('river-' + giver)[-1]"}
+      - {op: move, obj: "{taken}", to: "melds-{actor}"}
+      - {op: set, obj: "{taken}", field: turn, value: sideways}
+      - {op: move, obj: "{t1}", to: "melds-{actor}"}
+      - {op: move, obj: "{t2}", to: "melds-{actor}"}
+      - {op: advance, to: turn, player: "{actor}", until: discard}
+  - id: chi
+    name: チー
+    rule: R3
+    when: 上家（左隣）が打牌した直後。その牌と順子になる 2 枚を持っているとき。
+    params:
+      - {name: t1, from: "hand-{actor}", kind: tile}
+      - {name: t2, from: "hand-{actor}", kind: tile}
+    let:
+      kami: "seat(actor, -1)"
+    steps:
+      - let: {taken: "on('river-' + kami)[-1]"}
+      - {op: move, obj: "{taken}", to: "melds-{actor}"}
+      - {op: set, obj: "{taken}", field: turn, value: sideways}
+      - {op: move, obj: "{t1}", to: "melds-{actor}"}
+      - {op: move, obj: "{t2}", to: "melds-{actor}"}
+      - {op: advance, to: turn, player: "{actor}", until: discard}
+  - id: win
+    name: 和了る（ツモ・ロン）
+    rule: R6
+    params:
+      - {name: how, choices: [tsumo, ron]}
+    steps:
+      - {op: note, text: "{how}"}
+  - id: finish
+    name: 局を終える
+    rule: R7
+    params:
+      - {name: winner, players: true}
+    steps:
+      - {op: end, winner: "{winner}"}
+
+flow:
+  stages:
+    - {id: setup, name: 局の準備, actions: [setup]}
+    - {id: play, name: 対局, order: seats, turn: main}
+  turns:
+    main:
+      phases:
+        - {id: draw, name: ツモ, main: [draw], max: 1, required: true, auto: true}
+        - {id: discard, name: 打牌, main: [discard, riichi], max: 1, required: true, auto: true}
+      reactions:
+        - {action: pon}
+        - {action: chi}
+        - {action: win}
+        - {action: finish}
+  end_when:
+    - {expr: "stage() == 'play' and not count_in('wall')", text: 山が尽きた（流局。R7）}
+
+metrics:
+  - {id: wall-left, name: 山の残り, badge: true, count: {in: wall}, needs: count}
+  - {id: hand-size, name: 手牌の枚数, per: player, count: {in: "hand-{player}"}, needs: count}
+
+rules:
+  - id: R1
+    type: setup
+    text: 136 枚を裏向きにして山にし、14 枚を王牌に分けて 1 枚をドラ表示牌として表にする。各自 13 枚を配る。親は東家。
+    refs: [tile, wall, dead-wall]
+  - id: R2
+    type: turn
+    text: 手番の人は山から 1 枚ツモり、手牌から 1 枚を自分の河に捨てる。手番は東→南→西→北の順。
+    refs: [wall, "hand-{player}", "river-{player}"]
+  - id: R3
+    type: reaction
+    text: >-
+      ほかの人の捨て牌で、同じ牌 2 枚と合わせてポン、上家の捨て牌で順子を作ってチーができる。鳴いた牌は横向きにして面子として晒し、
+      鳴いた人の手番になって打牌する（ツモはしない）。同時に宣言されたら、ロン＞ポン＞チーの順。
+    refs: [tile, "melds-{player}"]
+  - {id: R4, type: always, text: カンとその嶺上牌・新ドラは自然文で扱う（この定義はアクションを持たない）。, refs: [dead-wall]}
+  - {id: R5, type: action, text: 鳴いていない聴牌の人は、1000 点を出してリーチできる。宣言した捨て牌は横向き。以後は手牌を変えられない。, refs: [stick]}
+  - {id: R6, type: reaction, text: 和了の形で役があれば、ツモ（自分のツモ牌）かロン（他人の捨て牌）で和了れる。自分の捨て牌にある牌ではロンできない（フリテン）。, refs: [tile]}
+  - {id: R7, type: end, text: 誰かが和了るか、山が尽きたら局は終わる。役・符から点数を計算して支払う。, refs: [wall, R6]}

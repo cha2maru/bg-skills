@@ -1,0 +1,541 @@
+format: bg-def/0.1
+game:
+  id: beast-duel
+  name: 精霊獣デュエル（架空のゲーム）
+  summary: >-
+    2 人対戦のカードゲーム。精霊獣のカードを場に出し、エネルギーを付けてワザで戦う。精霊獣は HP・タイプ・弱点・にげるコストを持ち、
+    受けたダメージはダメージカウンター（10 ずつ）で上に置く。どく・やけど・マヒの状態、コイン、トレーナーのカードの効果がある。
+    相手の精霊獣をきぜつさせるたびにサイドを 1 枚取り、3 枚取ったら勝ち。
+    （トレーディングカードゲームのワザ・エネルギー・状態異常の仕組みを試すための架空のゲーム）
+  version: 1
+  players: {min: 2, max: 2}
+
+players:
+  - {id: P1, name: ほのおデッキ, color: '#c0392b'}
+  - {id: P2, name: みずデッキ, color: '#2a6fb0'}
+
+kinds:
+  card:
+    base: object
+    text: カード。
+    states:
+      facing:
+        up: {text: 表向き。, show: {face: up}}
+        down: {text: 裏向き。, show: {face: down}}
+  creature:
+    base: card
+    name: 精霊獣
+    text: >-
+      精霊獣のカード。attributes：hp（最大 HP）、etype（タイプ）、weakness（弱点のタイプ。そのタイプのワザのダメージは 2 倍）、
+      retreat（にげるコスト）、attacks（ワザ：name・cost・damage・effect）。受けたダメージはダメージカウンターで上に置く。
+    show_state: [condition]
+    derived:
+      hp_left: "attr(self, 'hp') - count_on(self, kind='counter') * 10"  # 残り HP（受けたダメージカウンターから）
+    attributes:
+      hp: {type: number}
+      etype: {type: text}
+      weakness: {type: text}
+      retreat: {type: number}
+      attacks: {type: list}
+    states:
+      condition:
+        none: {text: 状態異常なし。}
+        poisoned: {text: どく。手番の間に 10 ダメージ。, show: {rotate: 0}}
+        burned: {text: やけど。手番の間に 20 ダメージ。}
+        paralyzed: {text: マヒ。次の自分の手番に、ワザもにげるも使えない。, show: {rotate: 90}}
+  energy:
+    base: card
+    name: エネルギー
+    text: 精霊獣に付けるエネルギー。ワザのコストになる。attributes の etype がタイプ。
+    attributes:
+      etype: {type: text}
+  trainer:
+    base: card
+    name: トレーナー
+    text: 使うと効果があり、捨て札になるカード。
+  potion: {base: trainer, name: きずぐすり, text: 自分の精霊獣 1 匹のダメージカウンターを 2 個まで取る。}
+  notes: {base: trainer, name: 研究ノート, text: 山札から 2 枚引く。}
+  switch: {base: trainer, name: 入れ替え, text: 自分のバトル場の精霊獣を、ベンチの精霊獣と入れ替える（状態異常は消える）。}
+  counter:
+    base: object
+    distinct: false
+    name: ダメージカウンター
+    text: 1 個で 10 ダメージ。精霊獣の上に置く。
+  coin:
+    base: object
+    name: コイン
+    text: 効果で投げるコイン。
+    states:
+      face:
+        heads: {text: おもて。}
+        tails: {text: うら。}
+
+areas:
+  - id: supply
+    name: カウンターとコイン
+    text: ダメージカウンター（いくらでもある）とコイン。
+    visibility: {face: all}
+  - id: "field-{player}"
+    for_each: {player: players}
+    name: 場
+    owner: "{player}"
+    visibility: {face: all}
+    areas:
+      - id: "active-{player}"
+        name: バトル場
+        text: 戦う精霊獣を 1 匹置く。エネルギーとダメージカウンターは精霊獣の上に置く。
+        capacity: 1
+      - id: "bench-{player}"
+        name: ベンチ
+        text: 控えの精霊獣を 3 匹まで置く。
+        capacity: 3
+  - id: "hand-{player}"
+    for_each: {player: players}
+    name: 手札
+    owner: "{player}"
+    visibility: {face: owner}
+  - id: "deck-{player}"
+    for_each: {player: players}
+    name: 山札
+    owner: "{player}"
+    ordered: true
+    visibility: {face: none, order: none}
+  - id: "prizes-{player}"
+    for_each: {player: players}
+    name: サイド
+    owner: "{player}"
+    text: 最初に山札から 3 枚伏せて置く。相手の精霊獣をきぜつさせるたびに 1 枚取って手札に加える。
+    ordered: true
+    visibility: {face: none, order: none}
+  - id: "discard-{player}"
+    for_each: {player: players}
+    name: トラッシュ
+    owner: "{player}"
+    visibility: {face: all}
+
+table:
+  center: [supply]
+  per_player: ["field-{player}", "hand-{player}", "deck-{player}", "prizes-{player}", "discard-{player}"]
+
+objects:
+  - {id: counter-pool, kind: counter, count: unlimited, start: supply}
+  - {id: the-coin, kind: coin, start: supply}
+  # P1：ほのおデッキ（20 枚）
+  - id: "P1-hibana-{copy}"
+    copies: 3
+    kind: creature
+    owner: P1
+    start: deck-P1
+    attributes: &hibana
+      title: ヒバナ
+      hp: 60
+      etype: fire
+      weakness: water
+      retreat: 1
+      attacks:
+        - {name: 体当たり, cost: [any], damage: 10}
+        - {name: 火の粉, cost: [fire, any], damage: 20, effect: burn, text: 相手をやけどにする。}
+  - id: P1-kaenjishi
+    kind: creature
+    owner: P1
+    start: deck-P1
+    attributes:
+      title: カエンジシ
+      hp: 90
+      etype: fire
+      weakness: water
+      retreat: 2
+      attacks:
+        - {name: 炎の牙, cost: [fire, fire, any], damage: 70, effect: discard_fire, text: 自分のほのおエネルギーを 1 個トラッシュする。}
+  - id: "P1-konoha-{copy}"
+    copies: 2
+    kind: creature
+    owner: P1
+    start: deck-P1
+    attributes: &konoha
+      title: コノハ
+      hp: 60
+      etype: grass
+      weakness: fire
+      retreat: 1
+      attacks:
+        - {name: 吸い取る, cost: [grass], damage: 10, effect: heal10, text: 自分のダメージカウンターを 1 個取る。}
+        - {name: 毒の粉, cost: [grass, any], damage: 10, effect: poison, text: 相手をどくにする。}
+  - {id: "P1-fire-{copy}", copies: 7, kind: energy, owner: P1, start: deck-P1, attributes: {title: ほのおエネルギー, etype: fire}}
+  - {id: "P1-grass-{copy}", copies: 3, kind: energy, owner: P1, start: deck-P1, attributes: {title: くさエネルギー, etype: grass}}
+  - {id: "P1-potion-{copy}", copies: 2, kind: potion, owner: P1, start: deck-P1}
+  - {id: "P1-notes-{copy}", copies: 1, kind: notes, owner: P1, start: deck-P1}
+  - {id: P1-switch, kind: switch, owner: P1, start: deck-P1}
+  # P2：みずデッキ（20 枚）
+  - id: "P2-shizuku-{copy}"
+    copies: 3
+    kind: creature
+    owner: P2
+    start: deck-P2
+    attributes:
+      title: シズク
+      hp: 60
+      etype: water
+      weakness: grass
+      retreat: 1
+      attacks:
+        - {name: 水鉄砲, cost: [water], damage: 20}
+        - {name: あわ, cost: [water, any], damage: 20, effect: paralyze_coin, text: コインを投げておもてなら、相手をマヒにする。}
+  - id: P2-uzushio
+    kind: creature
+    owner: P2
+    start: deck-P2
+    attributes:
+      title: ウズシオ
+      hp: 80
+      etype: water
+      weakness: grass
+      retreat: 2
+      attacks:
+        - {name: 渦潮, cost: [water, water], damage: 30, effect: bench10, text: 相手のベンチの精霊獣全員にも 10 ダメージ（弱点は計算しない）。}
+  - id: P2-morinonushi
+    kind: creature
+    owner: P2
+    start: deck-P2
+    attributes:
+      title: モリノヌシ
+      hp: 100
+      etype: grass
+      weakness: fire
+      retreat: 3
+      attacks:
+        - {name: 大樹の一撃, cost: [grass, grass, any], damage: 50}
+  - id: "P2-konoha-{copy}"
+    copies: 1
+    kind: creature
+    owner: P2
+    start: deck-P2
+    attributes: *konoha
+  - {id: "P2-water-{copy}", copies: 7, kind: energy, owner: P2, start: deck-P2, attributes: {title: みずエネルギー, etype: water}}
+  - {id: "P2-grass-{copy}", copies: 3, kind: energy, owner: P2, start: deck-P2, attributes: {title: くさエネルギー, etype: grass}}
+  - {id: "P2-potion-{copy}", copies: 2, kind: potion, owner: P2, start: deck-P2}
+  - {id: "P2-notes-{copy}", copies: 1, kind: notes, owner: P2, start: deck-P2}
+  - {id: P2-switch, kind: switch, owner: P2, start: deck-P2}
+
+actions:
+  - id: setup
+    name: 山札を切り、5 枚引き、サイドを 3 枚置く
+    rule: R1
+    by: [keeper]
+    steps:
+      - if: "count_in('box') > 0"  # 箱から始めた対局（--from-box）：各自のカードを山札へ、カウンターとコインを補給へ
+        do:
+          - each: players
+            do:
+              - {op: gather, from: box, to: "deck-{player}", owner: "{player}", facing: down}
+          - {op: gather, from: box, to: supply}
+      - each: players
+        do:
+          - {op: shuffle, area: "deck-{player}"}
+          - {op: move, obj: "top:deck-{player}", to: "hand-{player}", times: 5}
+          - {op: move, obj: "top:deck-{player}", to: "prizes-{player}", times: 3}
+  - id: mulligan
+    name: 引き直す（手札に精霊獣がいない）
+    rule: R1
+    require:
+      - {expr: "not on('hand-' + actor, kind='creature')", text: 手札に精霊獣がいる}
+    steps:
+      - {op: gather, from: "hand-{actor}", to: "deck-{actor}"}
+      - {op: shuffle, area: "deck-{actor}"}
+      - {op: move, obj: "top:deck-{actor}", to: "hand-{actor}", times: 5}
+  - id: place-active
+    name: バトル場に出す（準備・きぜつの後）
+    rule: R1
+    params:
+      - {name: card, from: "hand-{actor}", kind: creature}
+    require:
+      - {expr: "not on1('active-' + actor)", text: バトル場に精霊獣がいる}
+    steps:
+      - {op: move, obj: "{card}", to: "active-{actor}"}
+  - id: promote
+    name: ベンチからバトル場に出す（きぜつの後）
+    rule: R7
+    params:
+      - {name: card, from: "bench-{actor}", kind: creature}
+    require:
+      - {expr: "not on1('active-' + actor)", text: バトル場に精霊獣がいる}
+    steps:
+      - {op: move, obj: "{card}", to: "active-{actor}"}
+  - id: draw
+    name: 山札から 1 枚引く
+    rule: R2
+    require:
+      - {expr: "count_in('deck-' + actor) > 0", text: 山札がない（引けなければ負け。R8）}
+    steps:
+      - {op: move, obj: "top:deck-{actor}", to: "hand-{actor}"}
+  - id: bench
+    name: ベンチに出す
+    rule: R3
+    params:
+      - {name: card, from: "hand-{actor}", kind: creature}
+    require:
+      - {expr: "count_on('bench-' + actor) < 3", text: ベンチは 3 匹まで}
+    steps:
+      - {op: move, obj: "{card}", to: "bench-{actor}"}
+  - id: attach
+    name: エネルギーを付ける
+    rule: R3
+    params:
+      - {name: energy, from: "hand-{actor}", kind: energy}
+      - {name: target, from: "field-{actor}", kind: creature}
+    steps:
+      - {op: move, obj: "{energy}", to: "{target}"}
+  - id: potion
+    name: きずぐすりを使う
+    rule: R4
+    params:
+      - {name: card, from: "hand-{actor}", kind: potion}
+      - {name: target, from: "field-{actor}", kind: creature}
+    let:
+      k: "min(2, count_on(target, kind='counter'))"
+    steps:
+      - {op: move, obj: "{card}", to: "discard-{actor}"}
+      - if: "k > 0"
+        do:
+          - {op: move, obj: counter-pool, from: "{target}", to: supply, n: "{k}"}
+  - id: notes
+    name: 研究ノートを使う
+    rule: R4
+    params:
+      - {name: card, from: "hand-{actor}", kind: notes}
+    let:
+      k: "min(2, count_in('deck-' + actor))"
+    steps:
+      - {op: move, obj: "{card}", to: "discard-{actor}"}
+      - {op: move, obj: "top:deck-{actor}", to: "hand-{actor}", times: "{k}"}
+  - id: switch
+    name: 入れ替えを使う
+    rule: R4
+    params:
+      - {name: card, from: "hand-{actor}", kind: switch}
+      - {name: to, from: "bench-{actor}", kind: creature}
+    let:
+      me: "on1('active-' + actor)"
+    steps:
+      - {op: move, obj: "{card}", to: "discard-{actor}"}
+      - {op: set, obj: "{me}", field: condition, value: none}
+      - {op: move, obj: "{me}", to: "bench-{actor}"}
+      - {op: move, obj: "{to}", to: "active-{actor}"}
+  - id: retreat
+    name: にげる
+    rule: R5
+    params:
+      - {name: to, from: "bench-{actor}", kind: creature}
+    require:
+      - {expr: "on1('active-' + actor) and state(on1('active-' + actor), 'condition') != 'paralyzed'", text: マヒしているとにげられない}
+      - {expr: "on1('active-' + actor) and len(on(on1('active-' + actor), kind='energy')) >= attr(on1('active-' + actor), 'retreat')", text: にげるコストのエネルギーが足りない}
+    let:
+      me: "on1('active-' + actor)"
+      pay: "on(me, kind='energy')[:attr(me, 'retreat')]"
+    steps:
+      - each: pay
+        as: e
+        do:
+          - {op: move, obj: "{e}", to: "discard-{actor}"}
+      - {op: set, obj: "{me}", field: condition, value: none}
+      - {op: move, obj: "{me}", to: "bench-{actor}"}
+      - {op: move, obj: "{to}", to: "active-{actor}"}
+  - id: attack
+    name: ワザを使う
+    rule: R6
+    stepwise: true
+    params:
+      - name: move
+        choices: ["1", "2"]
+        require:
+          - {expr: "on1('active-' + actor) and int(value) <= len(attr(on1('active-' + actor), 'attacks'))", text: そのワザはない}
+          - expr: >-
+              on1('active-' + actor) and int(value) <= len(attr(on1('active-' + actor), 'attacks')) and
+              len(on(on1('active-' + actor), kind='energy')) >= len(attr(on1('active-' + actor), 'attacks')[int(value) - 1]['cost']) and
+              all(count_of([attr(e, 'etype') for e in on(on1('active-' + actor), kind='energy')], t) >= count_of(attr(on1('active-' + actor), 'attacks')[int(value) - 1]['cost'], t)
+                  for t in ['fire', 'water', 'grass'])
+            text: エネルギーが足りない
+    require:
+      - {expr: "on1('active-' + actor) and on1('active-' + seat(actor, 1))", text: バトル場に精霊獣がいない}
+      - {expr: "on1('active-' + actor) and state(on1('active-' + actor), 'condition') != 'paralyzed'", text: マヒしているとワザを使えない}
+    let:
+      me: "on1('active-' + actor)"
+      opp: "seat(actor, 1)"
+      foe: "on1('active-' + opp)"
+      atk: "attr(me, 'attacks')[int(move) - 1]"
+      eff: "atk['effect'] if 'effect' in atk else ''"
+      weak: "foe and attr(foe, 'weakness') == attr(me, 'etype')"
+      label: "attr(me, 'title') + ' の「' + atk['name'] + '」' + ('（弱点で 2 倍）' if weak else '')"
+      n: "atk['damage'] * (2 if weak else 1) // 10"
+    steps:
+      - {op: say, text: "{label}"}
+      - if: "foe and n > 0"
+        do:
+          - {op: move, obj: counter-pool, from: supply, to: "{foe}", n: "{n}"}
+      - if: "eff == 'burn'"
+        do:
+          - {op: set, obj: "{foe}", field: condition, value: burned}
+      - if: "eff == 'poison'"
+        do:
+          - {op: set, obj: "{foe}", field: condition, value: poisoned}
+      - if: "eff == 'heal10' and count_on(me, kind='counter') > 0"
+        do:
+          - {op: move, obj: counter-pool, from: "{me}", to: supply, n: 1}
+      - if: "eff == 'discard_fire'"
+        let:
+          e1: "first([e for e in on(me, kind='energy') if attr(e, 'etype') == 'fire'])"
+        do:
+          - {op: move, obj: "{e1}", to: "discard-{actor}"}
+      - if: "eff == 'bench10'"
+        do:
+          - each: "on('bench-' + opp, kind='creature')"
+            as: b
+            do:
+              - {op: move, obj: counter-pool, from: supply, to: "{b}", n: 1}
+      - if: "eff == 'paralyze_coin'"
+        do:
+          - {op: roll, obj: the-coin, field: face}
+          - if: "state('the-coin', 'face') == 'heads'"
+            do:
+              - {op: say, text: コインはおもて。マヒにした}
+              - {op: set, obj: "{foe}", field: condition, value: paralyzed}
+            else:
+              - {op: say, text: コインはうら}
+      # ダメージを置いた後の HP で、きぜつを調べる（stepwise：前の手順の結果を読む）
+      - each: "[c for c in ([foe] if foe else []) + on('bench-' + opp, kind='creature') if count_on(c, kind='counter') * 10 >= attr(c, 'hp')]"
+        as: ko
+        do:
+          - let: {koname: "attr(ko, 'title')"}
+          - {op: say, text: "{koname} はきぜつした"}
+          - {op: gather, from: "{ko}", to: supply, kind: counter}
+          - {op: gather, from: "{ko}", to: "discard-{opp}"}
+          - {op: set, obj: "{ko}", field: condition, value: none}
+          - {op: move, obj: "{ko}", to: "discard-{opp}"}
+          - {op: move, obj: "top:prizes-{actor}", to: "hand-{actor}"}
+  - id: knock-out
+    name: きぜつさせる（手番の間のダメージ）
+    rule: R7
+    by: [keeper]
+    params:
+      - {name: target, kind: creature}
+    let:
+      own: owner(target)
+      foe: seat(owner(target), 1)
+      tname: "attr(target, 'title')"
+    steps:
+      - {op: say, text: "{tname} はきぜつした"}
+      - {op: gather, from: "{target}", to: supply, kind: counter}
+      - {op: gather, from: "{target}", to: "discard-{own}"}
+      - {op: set, obj: "{target}", field: condition, value: none}
+      - {op: move, obj: "{target}", to: "discard-{own}"}
+      - {op: move, obj: "top:prizes-{foe}", to: "hand-{foe}"}  # きぜつさせた側（相手）が 1 枚取る（R7）
+  - id: finish
+    name: 終了する
+    rule: R8
+    by: [keeper]
+    params:
+      - {name: winner, players: true}
+    steps:
+      - {op: end, winner: "{winner}"}
+
+flow:
+  stages:
+    - {id: setup, name: 準備, actions: [setup, mulligan, place-active, bench]}
+    - id: main
+      name: 対戦
+      order: seats
+      turn: main
+  turns:
+    main:
+      on_start:
+        # 手番の間：バトル場のどく・やけどのダメージ。前の手番に相手をマヒにしたプレイヤーの手番が来たら、相手のマヒを消す
+        - each: "[on1('active-' + p) for p in players() if on1('active-' + p) and state(on1('active-' + p), 'condition') == 'poisoned']"
+          as: c
+          do:
+            - {op: move, obj: counter-pool, from: supply, to: "{c}", n: 1}
+        - each: "[on1('active-' + p) for p in players() if on1('active-' + p) and state(on1('active-' + p), 'condition') == 'burned']"
+          as: c
+          do:
+            - {op: move, obj: counter-pool, from: supply, to: "{c}", n: 2}
+        - each: "[on1('active-' + p) for p in players() if p != active() and on1('active-' + p) and state(on1('active-' + p), 'condition') == 'paralyzed']"
+          as: c
+          do:
+            - {op: set, obj: "{c}", field: condition, value: none}
+        # どく・やけどのダメージで HP が 0 になった精霊獣は、ここできぜつさせる（knock-out の手順を呼ぶ。R7）
+        - each: "[c for p in players() for c in on('active-' + p, kind='creature') if count_on(c, kind='counter') * 10 >= attr(c, 'hp')]"
+          as: c
+          do:
+            - {call: knock-out, args: {target: "{c}"}}
+      phases:
+        - {id: draw, name: 引く, main: [draw], max: 1, required: true, auto: true}
+        - {id: play, name: 準備とワザ, main: [attack], max: 1, auto: true}
+      free:  # 引いた後（準備とワザのフェーズ）だけ
+        - {action: attach, max: 1, phases: [play]}
+        - {action: bench, phases: [play]}
+        - {action: potion, phases: [play]}
+        - {action: notes, phases: [play]}
+        - {action: switch, phases: [play]}
+        - {action: retreat, max: 1, phases: [play]}
+        - {action: promote}
+        - {action: place-active}
+      reactions:
+        - {action: promote}
+        - {action: knock-out}
+        - {action: finish}
+  auto_end: true  # 並びが優先の順（サイドを取り切ったのが先）
+  end_when:
+    - {expr: "[p for p in players() if stage() == 'main' and count_in('prizes-' + p) == 0]", winners: value, rule: R8, text: "{value} がサイドをすべて取った（勝ち。R8）"}
+    - {expr: "[p for p in players() if stage() == 'main' and active() == p and phase() == 'draw' and count_in('deck-' + p) == 0]", losers: value, rule: R8, text: "{value} は山札から引けない（負け。R8）"}
+    - {expr: "[p for p in players() if stage() == 'main' and not parts_in(['active-' + p, 'bench-' + p], kind='creature')]", losers: value, rule: R8, text: "{value} の場に精霊獣がいない（負け。R8）"}
+  signals:
+    - {expr: "[c for p in players() for c in on('active-' + p, kind='creature') + on('bench-' + p, kind='creature') if count_on(c, kind='counter') * 10 >= attr(c, 'hp')]", text: "HP が 0 になった：{value}（きぜつさせる。R7）", public: true}
+    - {expr: "[p for p in players() if stage() == 'main' and not on1('active-' + p) and on('bench-' + p, kind='creature')]", text: "{value} のバトル場が空（ベンチから出す。R7）", public: true}
+
+metrics:
+  - {id: prizes, name: 残りのサイド, badge: true, per: player, count: {in: "prizes-{player}"}, needs: count, refs: [R8]}
+  - {id: hand, name: 手札, per: player, count: {in: "hand-{player}"}, needs: count}
+  - {id: hp, name: バトル場の残り HP, per: player, expr: "attr(on1('active-' + player), 'hp') - 10 * count_on(on1('active-' + player), kind='counter') if on1('active-' + player) else 0"}
+
+rules:
+  - id: R1
+    type: setup
+    text: >-
+      各自、山札を切って 5 枚引き、山札の上から 3 枚をサイドとして伏せて置く。手札に精霊獣がいなければ、手札を山札に戻して切り、
+      5 枚引き直す。各自、手札の精霊獣を 1 匹バトル場に出し、残りはベンチに 3 匹まで出してよい。先手は P1。
+    refs: [creature, "prizes-{player}"]
+  - id: R2
+    type: turn
+    text: 手番の初めに山札から 1 枚引く。
+    refs: ["deck-{player}"]
+  - id: R3
+    type: turn
+    text: >-
+      手番の間に、好きな順で何度でも：手札の精霊獣をベンチに出す（3 匹まで）、トレーナーを使う。エネルギーは手番に 1 枚まで、
+      自分の精霊獣 1 匹に付ける。
+    refs: [energy, "bench-{player}"]
+  - id: R4
+    type: action
+    text: トレーナーのカードは、書かれた効果を行ってトラッシュする（きずぐすり・研究ノート・入れ替え）。
+    refs: [trainer]
+  - id: R5
+    type: action
+    text: 手番に 1 回、バトル場の精霊獣の「にげるコスト」の数だけ付いているエネルギーをトラッシュして、ベンチの精霊獣と入れ替えられる。マヒしていたらにげられない。ベンチに戻ると状態異常は消える。
+    refs: [creature]
+  - id: R6
+    type: action
+    text: >-
+      手番の最後に、バトル場の精霊獣のワザを 1 つ使ってよい。ワザのコストのエネルギー（any はどのタイプでもよい）が付いていなければ使えない。
+      ダメージは相手のバトル場の精霊獣に、10 ごとにダメージカウンターを 1 個置く。相手の弱点が自分のタイプなら 2 倍。ワザの効果（やけど・どく・回復・
+      ベンチへのダメージ・コインでマヒ）も行う。ワザを使うと手番が終わる。マヒしているとワザを使えない。
+    refs: [creature, counter, coin]
+  - id: R7
+    type: turn
+    text: >-
+      ダメージカウンターの合計が HP 以上になった精霊獣はきぜつし、付いているカードとともにトラッシュする。きぜつさせた側はサイドを 1 枚取る。
+      バトル場の精霊獣がきぜつしたら、持ち主はベンチから 1 匹バトル場に出す。手番と手番の間に、どくは 10、やけどは 20 のダメージ。
+      マヒは、マヒした精霊獣の持ち主の次の手番が終わると消える。
+    refs: [counter]
+  - id: R8
+    type: end
+    text: サイドをすべて取ったプレイヤーの勝ち。場に精霊獣がいなくなったプレイヤー、手番の初めに山札から引けないプレイヤーの負け。
+    refs: ["prizes-{player}"]

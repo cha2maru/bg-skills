@@ -1,0 +1,220 @@
+format: bg-def/0.1
+game:
+  id: rune-clash
+  name: ルーン決闘（架空のゲーム）
+  summary: >-
+    2 人対戦のカードゲーム。手番ごとにルーン（魔力）が 1 つ増え、ルーンを払って呪文のカードを唱える。唱えた呪文はすぐには効かず、
+    スタックに積まれる。相手はそれに応じて呪文を積む（打ち消し・守り）か、見送る。後から積んだ呪文から解決する。
+    相手に 10 ダメージを与えたら勝ち。（割り込み＝スタックの使い方を試すための架空のゲーム。bg-design で作った）
+  version: 2
+  strict: true  # 手札は隠れた情報。外れた行為は記録しない
+  players: {min: 2, max: 2}
+  open_questions:
+    - 打ち消しを打ち消せるか（今は打ち消しも呪文なので打ち消せる）
+    - 山札が尽きたら（今は引けないだけ。負けにするか）
+
+players:
+  - {id: P1, name: 先手, color: '#7b3fa0'}
+  - {id: P2, name: 後手, color: '#2a8a6a'}
+
+kinds:
+  card:
+    base: object
+    text: 呪文のカード。attributes：cost（払うルーン）。
+    attributes:
+      cost: {type: number}
+    states:
+      facing:
+        up: {text: 表向き。, show: {face: up}}
+        down: {text: 裏向き。, show: {face: down}}
+  bolt: {base: card, name: 雷撃, text: 相手に 3 ダメージ。}
+  ward: {base: card, name: 守りの紋, text: このあと解決する相手の雷撃 1 つを打ち消す。ルーン 2。}
+  dispel: {base: card, name: 解呪, text: スタックの呪文 1 つを打ち消す。}
+  mend: {base: card, name: 癒し, text: 自分のダメージを 2 取る。}
+  rune: {base: object, distinct: false, name: ルーン, text: 呪文を唱えるときに払う。}
+  wound: {base: object, distinct: false, name: ダメージ, text: 10 個たまったら負け。}
+
+areas:
+  - {id: supply, name: 補給}
+  - id: "seat-{player}"
+    for_each: {player: players}
+    owner: "{player}"
+    areas:
+      - {id: "deck-{player}", name: 山札, ordered: true, visibility: {face: none}}
+      - {id: "hand-{player}", name: 手札, visibility: {face: owner}}
+      - {id: "pool-{player}", name: ルーン置き場}
+      - {id: "life-{player}", name: ダメージ}
+      - {id: "discard-{player}", name: 捨て札}
+  - {id: casting, name: 唱えている呪文, text: スタックに積まれた呪文のカードを、解決するまで置く。}
+
+objects:
+  - {id: rune-pool, kind: rune, count: unlimited, start: supply}
+  - {id: wound-pool, kind: wound, count: unlimited, start: supply}
+  - {id: "{player}-bolt-{copy}", for_each: {player: players}, copies: 8, kind: bolt, owner: "{player}", start: "deck-{player}", attributes: {cost: 1, title: 雷撃}}
+  - {id: "{player}-ward-{copy}", for_each: {player: players}, copies: 4, kind: ward, owner: "{player}", start: "deck-{player}", attributes: {cost: 2, title: 守りの紋}}
+  - {id: "{player}-dispel-{copy}", for_each: {player: players}, copies: 3, kind: dispel, owner: "{player}", start: "deck-{player}", attributes: {cost: 2, title: 解呪}}
+  - {id: "{player}-mend-{copy}", for_each: {player: players}, copies: 5, kind: mend, owner: "{player}", start: "deck-{player}", attributes: {cost: 1, title: 癒し}}
+
+functions:
+  runes:
+    params: [p]
+    expr: "count_in('pool-' + p, kind='rune')"
+  cast_card:  # スタックの番号から、唱えた呪文のカード
+    params: [n]
+    expr: "next((e['args']['card'] for e in stack() if str(e['n']) == str(n) and 'card' in e['args']), None)"
+
+actions:
+  - id: setup
+    name: 山札を切り、4 枚引く
+    rule: R1
+    by: [keeper]
+    steps:
+      - each: players
+        do:
+          - {op: shuffle, area: "deck-{player}"}
+          - {op: move, obj: "top:deck-{player}", to: "hand-{player}", times: 4}
+      - {op: move, obj: rune-pool, from: supply, to: pool-P2, n: 1}  # 後手の埋め合わせ（bg-balance：ボット 40 局で先手 50%。notes/loop L19）
+  - id: draw
+    name: 1 枚引いて、ルーンを 1 つ得る
+    rule: R2
+    require:
+      - {expr: "count_in('deck-' + actor) > 0", text: 山札がない}
+    steps:
+      - {op: move, obj: "top:deck-{actor}", to: "hand-{actor}"}
+      - {op: move, obj: rune-pool, from: supply, to: "pool-{actor}", n: 1}
+  - id: cast-bolt
+    name: 雷撃を唱える
+    rule: R3
+    stack: true
+    during_stack: true
+    params:
+      - {name: card, from: "hand-{actor}", kind: bolt}
+    require:
+      - {expr: "runes(actor) >= 1", text: ルーンが足りない}
+    cost:  # 唱えたときに払う（解決を待たない）
+      - {op: move, obj: rune-pool, from: "pool-{actor}", to: supply, n: 1}
+      - {op: move, obj: "{card}", to: casting, facing: up}
+    let:
+      foe: seat(actor, 1)
+    steps:
+      - if: "'{card}' in on('casting')"
+        do:
+          - {op: move, obj: wound-pool, from: supply, to: "life-{foe}", n: 3}
+      - {op: move, obj: "{card}", to: "discard-{actor}"}
+  - id: cast-mend
+    name: 癒しを唱える
+    rule: R3
+    stack: true
+    during_stack: true
+    params:
+      - {name: card, from: "hand-{actor}", kind: mend}
+    require:
+      - {expr: "runes(actor) >= 1", text: ルーンが足りない}
+    cost:
+      - {op: move, obj: rune-pool, from: "pool-{actor}", to: supply, n: 1}
+      - {op: move, obj: "{card}", to: casting, facing: up}
+    steps:
+      - if: "count_in('life-' + actor, kind='wound') > 0"
+        do:
+          - {op: move, obj: wound-pool, from: "life-{actor}", to: supply, n: "{heal}"}
+        let:
+          heal: "min(2, count_in('life-' + actor, kind='wound'))"
+      - {op: move, obj: "{card}", to: "discard-{actor}"}
+  - id: cast-dispel
+    name: 解呪を唱える（スタックの呪文を打ち消す）
+    rule: R4
+    stack: true
+    during_stack: true
+    params:
+      - {name: card, from: "hand-{actor}", kind: dispel}
+      - {name: spell, stack: true}
+    require:
+      - {expr: "runes(actor) >= 2", text: ルーンが足りない}
+    cost:
+      - {op: move, obj: rune-pool, from: "pool-{actor}", to: supply, n: 2}
+      - {op: move, obj: "{card}", to: casting, facing: up}
+    steps:
+      - let: {target_card: "cast_card(spell)"}
+      - if: "target_card"
+        do:
+          - {op: cancel, target: "{spell}"}
+          - {op: move, obj: "{target_card}", to: "discard-{owner}"}
+        let:
+          owner: "owner(target_card)"
+      - {op: move, obj: "{card}", to: "discard-{actor}"}
+  - id: cast-ward
+    name: 守りの紋を唱える（相手の雷撃を打ち消す）
+    rule: R4
+    stack: true
+    during_stack: true
+    params:
+      - {name: card, from: "hand-{actor}", kind: ward}
+      - name: spell
+        stack: true
+        require:
+          - {expr: "kind(cast_card(value)) == 'bolt'", text: 雷撃ではない}
+    require:
+      - {expr: "runes(actor) >= 2", text: ルーンが足りない}
+    cost:
+      - {op: move, obj: rune-pool, from: "pool-{actor}", to: supply, n: 2}
+      - {op: move, obj: "{card}", to: casting, facing: up}
+    steps:
+      - let: {target_card: "cast_card(spell)"}
+      - if: "target_card"
+        do:
+          - {op: cancel, target: "{spell}"}
+          - {op: move, obj: "{target_card}", to: "discard-{owner}"}
+        let:
+          owner: "owner(target_card)"
+      - {op: move, obj: "{card}", to: "discard-{actor}"}
+  - id: finish
+    name: 終了する
+    rule: R5
+    by: [keeper]
+    params:
+      - {name: winner, players: true}
+    steps:
+      - {op: end, winner: "{winner}"}
+  - id: finish-draw
+    name: 引き分けで終える（手番の上限など）
+    rule: R5
+    by: [keeper]
+    steps:
+      - {op: end, draw: true}
+
+flow:
+  stages:
+    - {id: setup, name: 準備, actions: [setup]}
+    - {id: main, name: 対局, order: seats, turn: main}
+  turns:
+    main:
+      phases:
+        - {id: draw, name: 引く, main: [draw], max: 1, required: true, auto: true}
+        - {id: cast, name: 唱える, main: [cast-bolt, cast-mend, cast-dispel, cast-ward]}
+      reactions:  # 相手の手番でも、スタックに応じて唱えられる
+        - {action: cast-dispel}
+        - {action: cast-ward}
+        - {action: finish}
+        - {action: finish-draw}
+  auto_end: true  # 終わりの条件を満たしたら、結果を記録して終える
+  end_when:
+    - {expr: "[p for p in players() if count_in('life-' + p, kind='wound') >= 10]", losers: value, rule: R5, text: "{value} が 10 ダメージを受けた（相手の勝ち。R5）"}
+  signals:
+    - {expr: "[e['by'] + ' の ' + e['action'] for e in stack()]", text: "解決待ち：{value}（相手は応じるか見送る。R3）", public: true}
+
+metrics:
+  - {id: wounds, name: ダメージ, badge: true, per: player, count: {in: "life-{player}", kind: wound}, refs: [R5]}
+  - {id: runes, name: ルーン, badge: true, per: player, count: {in: "pool-{player}", kind: rune}}
+  - {id: hand, name: 手札, per: player, count: {in: "hand-{player}"}, needs: count}
+
+rules:
+  - {id: R1, type: setup, text: 各自 20 枚の山札を切り、4 枚引く。後手はルーンを 1 つ持って始める。先手から。, refs: [card, rune]}
+  - {id: R2, type: turn, text: 手番の初めに 1 枚引き、ルーンを 1 つ得る（ルーンは使わなければ残る）。, refs: [rune]}
+  - id: R3
+    type: action
+    text: >-
+      手番のプレイヤーは、ルーンを払って呪文を唱えられる（何回でも）。唱えた呪文はスタックに積まれ、すぐには効かない。
+      相手は応じて呪文を積むか、見送る。積んだ人以外が見送ったら、一番上の呪文を解決する。解決が終わってスタックが空になるまで、手番は進めない。
+    refs: [card, casting]
+  - {id: R4, type: action, text: 解呪・守りの紋は、相手の手番でもスタックに応じて唱えられる。打ち消された呪文は効かずに捨て札になる（払ったルーンは戻らない）。, refs: [dispel, ward]}
+  - {id: R5, type: end, text: ダメージが 10 個たまったプレイヤーの負け。決めた手番数で終わらなければ引き分け。, refs: [wound]}

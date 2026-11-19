@@ -1,0 +1,93 @@
+format: bg-def/0.1
+game:
+  id: tic-tac-toe
+  name: 三目並べ
+  summary: >-
+    2人が交互に自分の記号を3×3の盤の空いたマスに置き、
+    縦・横・斜めのどれか1列を先に自分の記号でそろえた方が勝つ。
+  version: 1
+  players: {min: 2, max: 2}
+
+players:
+  - id: X
+    name: 先手
+    text: 記号 X を使う。ゲームの最初の手番を行う。
+  - id: O
+    name: 後手
+    text: 記号 O を使う。
+
+kinds:
+  cell:
+    base: area
+    text: 盤のマス。記号を1つまで置ける（R2）。
+    capacity: 1
+  mark:
+    base: object
+    text: マスに置く記号の駒。表裏はない。置いた後は動かさない。
+    attributes:
+      symbol: {type: text, text: X か O。どのプレイヤーの記号かを表す。}
+
+areas:
+  - id: board
+    name: 盤
+    text: 3×3のマス目。盤の上のものは全員に見える。
+    visibility: {face: all}
+    layout:                       # 9マスを作る略記。展開すると c11〜c33
+      grid: [3, 3]
+      child_kind: cell
+      child_id: "c{row}{col}"
+      origin: 左上
+  - id: supply-X
+    name: X の置き場
+    owner: X
+    visibility: {face: all}
+  - id: supply-O
+    name: O の置き場
+    owner: O
+    visibility: {face: all}
+
+table:
+  center: [board]
+  per_player: ["supply-{player}"]
+
+groups:
+  line:
+    text: 縦・横・斜めに一直線に並んだ3マスの組。全部で8組。勝敗（R3）に使う。
+    members:
+      - [c11, c12, c13]
+      - [c21, c22, c23]
+      - [c31, c32, c33]
+      - [c11, c21, c31]
+      - [c12, c22, c32]
+      - [c13, c23, c33]
+      - [c11, c22, c33]
+      - [c13, c22, c31]
+
+objects:
+  - {id: mark-X, kind: mark, count: 5, attributes: {symbol: X}, start: supply-X}
+  - {id: mark-O, kind: mark, count: 4, attributes: {symbol: O}, start: supply-O}
+
+progress:
+  active: {text: 手番のプレイヤー。X か O。}
+  turn: {text: 何手目か。1から数える。}
+
+rules:
+  - id: R1
+    type: setup
+    text: 盤を空にし、各プレイヤーの置き場に自分の記号を置く。最初の手番は X。
+  - id: R2
+    type: turn
+    text: >-
+      手番のプレイヤーは、自分の置き場から記号を1つ取り、記号のないマスに置く。
+      パスはできない。置いたら手番は相手に移る。
+    refs: [mark, cell, supply-X, supply-O]
+  - id: R3
+    type: end
+    text: >-
+      あるプレイヤーの記号が line のどれか1組の3マスすべてにあれば、
+      そのプレイヤーの勝ちでゲームは終わる。
+    refs: [line]
+  - id: R4
+    type: end
+    text: 9マスすべてに記号があり、R3 を満たすプレイヤーがいなければ引き分けで終わる。
+    refs: [cell, R3]

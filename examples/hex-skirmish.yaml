@@ -1,0 +1,101 @@
+format: bg-def/0.1
+game:
+  id: hex-skirmish
+  name: 六角の陣取り（架空のゲーム）
+  version: 1
+  summary: >-
+    2 人が交互に、控えの駒を六角の盤に置くか、盤の上の自分の駒を隣のマスへ動かす。
+    自分の駒が隣り合って 3 つつながったら勝ち。
+  players: {min: 2, max: 2}
+
+players:
+  - {id: R, name: 赤, text: 赤の駒を使う。最初の手番を行う。}
+  - {id: B, name: 青, text: 青の駒を使う。}
+
+kinds:
+  hex:
+    base: area
+    text: 六角のマス。駒を 1 つまで置ける（R2）。
+    capacity: 1
+  piece:
+    base: object
+    text: 駒。持ち主のプレイヤーの色。
+    states:
+      posture:
+        ready: {text: 未行動。この手番にまだ動いていない。, show: {rotate: 0}}
+        tapped: {text: 行動済み（横向き）。この手番に動いた。, show: {rotate: 90}}
+
+areas:
+  - id: map
+    name: 盤
+    text: 半径 2 の六角の盤（19 マス）。隣り合うマスはリンクでつながる。
+    layout:
+      hex: {radius: 2}
+      child_kind: hex
+      child_id: "h{q}_{r}"
+  - id: "reserve-{player}"
+    for_each: {player: players}
+    name: 控え
+    owner: "{player}"
+    text: まだ盤に置いていない、持ち主の駒。
+
+table:
+  center: [map]
+  per_player: ["reserve-{player}"]
+
+objects:
+  - id: "{player}-{copy}"
+    for_each: {player: players}
+    copies: 3
+    kind: piece
+    owner: "{player}"
+    start: "reserve-{player}"
+
+progress:
+  active: {text: 手番のプレイヤー。R か B。, start: R, refs: [R2]}
+
+actions:
+  - id: deploy
+    name: 控えの駒を置く
+    rule: R2
+    when: 自分の手番に、R2 のどちらか 1 つとして。置くのは空いたマス。
+    params:
+      - {name: piece, from: "reserve-{actor}"}
+      - {name: cell, in: map}
+    steps:
+      - {op: move, obj: "{piece}", to: "{cell}"}
+  - id: step
+    name: 駒を隣のマスへ動かす
+    rule: R2
+    when: 自分の手番に、R2 のどちらか 1 つとして。動かすのは未行動の自分の駒で、行き先は隣の空いたマス。
+    params:
+      - {name: piece, from: map}
+      - {name: cell, in: map}
+    steps:
+      - {op: move, obj: "{piece}", to: "{cell}"}
+      - {op: set, obj: "{piece}", field: posture, value: tapped}
+
+terms:
+  adjacent:
+    word: 隣
+    text: リンクでつながったマス。中心のマスには 6 つ、外周の角のマスには 3 つの隣がある。
+    refs: [hex]
+
+rules:
+  - id: R1
+    type: setup
+    text: 各プレイヤーは自分の駒 3 つを控えに置く。最初の手番は赤。
+  - id: R2
+    type: turn
+    text: >-
+      手番のプレイヤーは、控えの駒 1 つを空いたマスに置くか、盤の上の自分の未行動の駒 1 つを
+      隣の空いたマスへ動かして行動済み（横向き）にする。どちらかを必ず行う。
+    refs: [hex, piece, adjacent]
+  - id: R3
+    type: turn
+    text: 手番の終わりに、自分の駒をすべて未行動に戻し、手番を相手に移す。
+    refs: [piece]
+  - id: R4
+    type: end
+    text: 自分の駒 3 つが、隣どうしでつながったら（どれか 1 つが残り 2 つの隣にある）、そのプレイヤーの勝ち。
+    refs: [piece, adjacent]

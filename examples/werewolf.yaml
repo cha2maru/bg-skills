@@ -1,0 +1,330 @@
+format: bg-def/0.1
+game:
+  id: werewolf
+  name: 人狼
+  summary: >-
+    村人の中に人狼がまぎれている。夜は人狼が 1 人を襲い、占い師・狩人がひそかに能力を使う。昼は全員で話し合い、
+    投票で 1 人を処刑する。人狼が全員いなくなれば村の勝ち、人狼の数が村人側と同じになれば人狼の勝ち。
+    進行役（ゲームマスター）はキーパーが務める。
+  version: 1
+  strict: true  # 夜に話す・役職のない人が能力を使う、を警告で通すと記録から情報が漏れる。試すときは bg new --lenient
+  players: {min: 5, max: 8}
+
+players:
+  - {id: "P{copy}", copies: 8, name: "プレイヤー {copy}"}
+
+kinds:
+  role-card:
+    base: object
+    text: 役職のカード。持ち主だけが表を見られる。陣営（side）は wolf か village。
+    attributes:
+      side: {type: text}
+    states:
+      facing:
+        down: {text: 伏せてある。, show: {face: down}}
+        up: {text: 公開された。, show: {face: up}}
+  werewolf: {base: role-card, name: 人狼, text: 人狼。夜に仲間と相談し、村人を 1 人襲う。仲間の人狼を知っている。}
+  seer: {base: role-card, name: 占い師, text: 占い師。夜に 1 人を占い、人狼かどうか（陣営）を知る。}
+  knight: {base: role-card, name: 狩人, text: 狩人。夜に自分以外の 1 人を守る。守った人は人狼に襲われても死なない。}
+  villager: {base: role-card, name: 村人, text: 村人。能力はない。}
+  life:
+    base: object
+    name: 生死
+    text: 席の前に置く生死の札。
+    show_state: [status]
+    states:
+      status:
+        alive: {text: 生きている。}
+        dead: {text: 死んだ。話すことも投票することもできない。}
+  ballot:
+    base: object
+    name: 投票用紙
+    text: 昼の投票に使う。処刑したい人を書いて伏せ、全員が書いたら一斉に開く（封をした選択）。
+    states:
+      facing:
+        down: {text: 伏せてある（書いた本人だけが中身を知る）。, show: {face: down}}
+        up: {text: 開いた。, show: {face: up}}
+      target: player
+  night-marker:
+    base: object
+    text: 夜の行動の印。進行役だけが見る。
+    states:
+      target: player
+
+areas:
+  - id: "seat-{player}"
+    for_each: {player: players}
+    name: 席
+    owner: "{player}"
+    text: プレイヤーの席。生死の札を置く。
+    visibility: {face: all}
+  - id: "role-{player}"
+    for_each: {player: players}
+    name: 役職
+    owner: "{player}"
+    text: 配られた役職のカード。持ち主だけが見る。
+    visibility: {face: owner}
+  - id: role-deck
+    name: 役職の山
+    text: 配る前に切り混ぜる役職のカード。
+    visibility: {face: none, order: none}
+  - id: ballots
+    name: 投票
+    text: 投票用紙を伏せて出す場所。開くまで、書いた本人のほかは中身を知らない。
+    visibility: {face: all}
+  - id: night
+    name: 夜の行動
+    text: 襲撃・護衛の印。進行役（キーパー）だけが見る。
+    visibility: {face: none}
+
+table:
+  center: [ballots, night, role-deck]
+  per_player: ["seat-{player}", "role-{player}"]
+
+objects:
+  - {id: W1, kind: werewolf, attributes: {side: wolf}}
+  - {id: W2, kind: werewolf, attributes: {side: wolf}}
+  - {id: SEER, kind: seer, attributes: {side: village}}
+  - {id: KNIGHT, kind: knight, attributes: {side: village}}
+  - {id: "V{copy}", kind: villager, copies: 4, attributes: {side: village}}
+  - {id: "life-{player}", kind: life, for_each: {player: players}, owner: "{player}", start: "seat-{player}"}
+  - {id: "ballot-{player}", kind: ballot, for_each: {player: players}, owner: "{player}", start: ballots, start_state: {facing: down}, attributes: {title: "投票用紙（{player}）"}}
+  - {id: fang, kind: night-marker, name: 襲撃, start: night}
+  - {id: shield, kind: night-marker, name: 護衛, start: night}
+
+progress:
+  runoff: {text: 決選投票の候補（空なら通常の投票）, start: []}
+
+actions:
+  - id: setup
+    name: 役職を配る
+    rule: R1
+    by: [keeper]
+    let:
+      n: len(players())
+      nw: "1 if n <= 5 else 2"
+      nk: "1 if n >= 6 else 0"
+      roles: "['W1', 'W2'][:nw] + ['SEER'] + ['KNIGHT'][:nk] + ['V1', 'V2', 'V3', 'V4'][:n - nw - 1 - nk]"
+    steps:
+      - each: roles
+        as: c
+        do:
+          - {op: move, obj: "{c}", to: role-deck, facing: down}
+      - {op: shuffle, area: role-deck}
+      - {op: move, obj: "top:role-deck", to: "role-{player}", each: players}
+      - {op: know, obj: "ballot-{player}", player: "{player}", each: players}
+  - id: wolves-meet
+    name: 人狼どうしが顔を合わせる
+    rule: R1
+    by: [keeper]
+    secret: true
+    steps:
+      - each: "parts_in(['role-' + p for p in players()], kind='werewolf')"
+        as: w
+        do:
+          - each: "[owner(where(x)) for x in parts_in(['role-' + p for p in players()], kind='werewolf') if x != w]"
+            as: mate
+            do:
+              - {op: know, obj: "{w}", player: "{mate}"}
+  - id: attack
+    name: 襲う（人狼）
+    rule: R3
+    secret: true
+    params:
+      - name: target
+        players: true
+        require:
+          - {expr: "state('life-' + value, 'status') == 'alive' and kind(on1('role-' + value)) != 'werewolf'", text: 生きている人狼以外を選ぶ}
+    require:
+      - {expr: "kind(on1('role-' + actor)) == 'werewolf' and state('life-' + actor, 'status') == 'alive'", text: 生きている人狼だけが襲える}
+    steps:
+      - {op: set, obj: fang, field: target, value: "{target}"}
+  - id: guard
+    name: 守る（狩人）
+    rule: R4
+    secret: true
+    params:
+      - name: target
+        players: true
+        require:
+          - {expr: "value != actor and state('life-' + value, 'status') == 'alive'", text: 自分以外の生きている人を選ぶ}
+    require:
+      - {expr: "kind(on1('role-' + actor)) == 'knight' and state('life-' + actor, 'status') == 'alive'", text: 生きている狩人だけが守れる}
+    steps:
+      - {op: set, obj: shield, field: target, value: "{target}"}
+  - id: divine
+    name: 占う（占い師）
+    rule: R5
+    secret: true
+    params:
+      - name: target
+        players: true
+        require:
+          - {expr: "value != actor", text: 自分以外を選ぶ}
+    require:
+      - {expr: "kind(on1('role-' + actor)) == 'seer' and state('life-' + actor, 'status') == 'alive'", text: 生きている占い師だけが占える}
+    steps:
+      - let: {card: "on1('role-' + target)"}
+      - {op: know, obj: "{card}", player: "{actor}", fields: [side]}
+  - id: dawn
+    name: 夜が明ける
+    rule: R6
+    by: [keeper]
+    let:
+      v: "state('fang', 'target')"
+      saved: "v == state('shield', 'target')"
+    steps:
+      - if: "v and not saved"
+        do:
+          - {op: set, obj: "life-{v}", field: status, value: dead}
+          - {op: say, text: "朝になった。{v} が無残な姿で見つかった。"}
+        else:
+          - {op: say, text: 朝になった。昨夜は誰も死ななかった。}
+      - {op: set, obj: fang, field: target, value: null}
+      - {op: set, obj: shield, field: target, value: null}
+  - id: vote
+    name: 投票用紙に書く
+    rule: R7
+    params:
+      - name: target
+        players: true
+        require:
+          - {expr: "value != actor and state('life-' + value, 'status') == 'alive'", text: 自分以外の生きている人を選ぶ}
+          - {expr: "not progress('runoff') or value in progress('runoff')", text: 決選投票では、同数だった人の中から選ぶ}
+    require:
+      - {expr: "state('life-' + actor, 'status') == 'alive'", text: 死んだ人は投票できない}
+    steps:
+      - {op: set, obj: "ballot-{actor}", field: target, value: "{target}"}
+  - id: open-votes
+    name: 投票を一斉に開く
+    rule: R7
+    by: [keeper]
+    require:
+      - {expr: "all(state('ballot-' + p, 'target') for p in players() if state('life-' + p, 'status') == 'alive')", text: まだ投票用紙を書いていない生きている人がいる}
+    steps:
+      - {op: set, obj: "ballot-{player}", field: facing, value: up, each: players}
+  - id: execute
+    name: 処刑する
+    rule: R8
+    by: [keeper]
+    params:
+      - {name: target, players: true, require: [{expr: "leaders() == [value]", text: 開いた票で、ただ 1 人の最多票の人ではない}]}
+    steps:
+      - {op: set, obj: "life-{target}", field: status, value: dead}
+      - {op: say, text: "{target} が処刑された。"}
+      - {op: progress, key: runoff, value: []}
+      - {op: set, obj: "ballot-{player}", field: target, value: null, each: players}
+      - {op: set, obj: "ballot-{player}", field: facing, value: down, each: players}
+  - id: runoff
+    name: 決選投票にする
+    rule: R8
+    by: [keeper]
+    require:
+      - {expr: "len(leaders()) > 1 and not progress('runoff')", text: 開いた票で最多票が同数のとき、1 回だけ}
+    steps:
+      - let: {names: "join(leaders())"}
+      - {op: progress, key: runoff, expr: "leaders()"}
+      - {op: say, text: "同数のため、決選投票：{names}"}
+      - {op: set, obj: "ballot-{player}", field: target, value: null, each: players}
+      - {op: set, obj: "ballot-{player}", field: facing, value: down, each: players}
+  - id: no-execution
+    name: 誰も処刑しない
+    rule: R8
+    by: [keeper]
+    require:
+      - {expr: "len(leaders()) > 1 and progress('runoff')", text: 決選投票でもなお同数のときだけ}
+    steps:
+      - {op: say, text: 決選投票でも同数のため、今日は誰も処刑されない。}
+      - {op: progress, key: runoff, value: []}
+      - {op: set, obj: "ballot-{player}", field: target, value: null, each: players}
+      - {op: set, obj: "ballot-{player}", field: facing, value: down, each: players}
+  - id: reveal-roles
+    name: 役職を公開する（終わり）
+    rule: R9
+    by: [keeper]
+    steps:
+      - {op: set, obj: "top:role-{player}", field: facing, value: up, each: players}
+  - id: finish
+    name: 終了する
+    rule: R9
+    by: [keeper]
+    params:
+      - {name: side, choices: [wolf, village]}
+    steps:
+      - let: {won: "[p for p in players() if attr(on1('role-' + p), 'side') == side]"}
+      - {op: end, winners: "{won}"}
+
+flow:
+  stages:
+    - {id: setup, name: 準備, actions: [setup, wolves-meet], talk: false}
+    - id: night
+      name: 夜
+      actions: [attack, guard, divine, dawn, reveal-roles, finish]
+      whisper: hidden  # 夜の内緒話（人狼どうし）は、聞いていない人にはあったことも見せない
+      talk: "kind(on1('role-' + speaker)) == 'werewolf' and state('life-' + speaker, 'status') == 'alive' and all(kind(on1('role-' + p)) == 'werewolf' for p in to)"
+      talk_text: 夜は、生きている人狼どうしだけが話せる（ほかの人は目を閉じている）
+    - id: day
+      name: 昼
+      actions: [vote, open-votes, execute, runoff, no-execution, reveal-roles, finish]
+      talk: "state('life-' + speaker, 'status') == 'alive'"
+      talk_text: 死んだ人は話せない
+  cycle: {from: night, to: day, times: 10}
+  end_when:
+    - {expr: "stage() != 'setup' and not [p for p in players() if state('life-' + p, 'status') == 'alive' and attr(on1('role-' + p), 'side') == 'wolf']", winners: "[p for p in players() if attr(on1('role-' + p), 'side') == 'village']", rule: R9, text: 人狼が全員死んだ。村の勝ち（R9）}
+    - expr: >-
+        stage() != 'setup' and len([p for p in players() if state('life-' + p, 'status') == 'alive' and attr(on1('role-' + p), 'side') == 'wolf']) >=
+        len([p for p in players() if state('life-' + p, 'status') == 'alive' and attr(on1('role-' + p), 'side') == 'village'])
+      winners: "[p for p in players() if attr(on1('role-' + p), 'side') == 'wolf']"
+      rule: R9
+      text: 人狼の数が村人側と同じになった。人狼の勝ち（R9）
+
+functions:
+  leaders:  # 開いた票で最多票の人（票がなければ空）
+    params: []
+    expr: "[p for p in players() if metric('votes', p) and metric('votes', p) == max(metric('votes', q) for q in players())]"
+
+metrics:
+  - {id: votes, name: 得票（開いた投票）, per: player, count: {in: ballots, kind: ballot, state: {facing: up, target: "{player}"}}, refs: [R7]}
+  - {id: alive, name: 生きている人数, expr: "len([p for p in players() if state('life-' + p, 'status') == 'alive'])"}
+
+rules:
+  - id: R1
+    type: setup
+    text: >-
+      進行役は人数に合わせて役職を選び（5 人：人狼 1・占い師 1・村人 3、6 人以上：人狼 2・占い師 1・狩人 1・残りは村人）、
+      伏せて切り混ぜ、1 人に 1 枚ずつ配る。各自は自分の役職だけを見る。最初の夜の前に、人狼どうしは互いが仲間だと知る。
+    refs: [role-card, role-deck]
+  - id: R2
+    type: turn
+    text: 夜と昼を交互に繰り返す。夜は全員が目を閉じ、進行役に呼ばれた役職だけが目を開けて能力を使う。
+    refs: [night]
+  - id: R3
+    type: turn
+    text: 夜、生きている人狼は相談して、人狼以外の生きている 1 人を襲う先に決める。相談は人狼どうしだけで、ほかの人には聞こえない。
+    refs: [werewolf]
+  - id: R4
+    type: turn
+    text: 夜、狩人は自分以外の 1 人を守る。守った人が襲われても死なない。
+    refs: [knight]
+  - id: R5
+    type: turn
+    text: 夜、占い師は自分以外の 1 人を占い、その人が人狼かどうかだけを知る（役職の名前は分からない）。
+    refs: [seer]
+  - id: R6
+    type: turn
+    text: 朝、進行役は襲われた人が死んだか（守られていなかったか）を告げる。死んだ人は以後話せず、投票もできない。役職は明かさない。
+    refs: [life]
+  - id: R7
+    type: turn
+    text: >-
+      昼、生きている人は自由に話し合う（嘘をついてよい。自分の役職を名乗っても、偽ってもよい）。話し合いの後、
+      各自が処刑したい 1 人を投票用紙に書いて伏せ、全員が書いたら一斉に開く。
+    refs: [ballot, ballots]
+  - id: R8
+    type: turn
+    text: 最も票を集めた人を処刑する。同数なら、同数の人の中で決選投票をし、なお同数なら誰も処刑しない。
+    refs: [R7]
+  - id: R9
+    type: end
+    text: 人狼が全員死んだら村人側（人狼以外）の勝ち。生きている人狼の数が、生きている村人側の数と同じかそれ以上になったら人狼の勝ち。終わったら全員の役職を公開する。
+    refs: [werewolf]

@@ -1,0 +1,209 @@
+format: bg-def/0.1
+game:
+  id: chess
+  name: チェス
+  summary: >-
+    2 人が交互に自分の駒を 1 つ動かし、相手のキングを詰ませた（チェックメイト）方が勝つ。
+  version: 1
+  players: {min: 2, max: 2}
+  open_questions:
+    - チェック（キングが取られる状態）にさせる手を禁じる判定は、自然文（R3）だけで持つ。式に名前を付けて使い回す仕組みがないため。
+
+players:
+  - {id: white, name: 白, text: 先手。盤の下側（行 7・8）から始める。前は上（行の番号が小さい方）。}
+  - {id: black, name: 黒, text: 後手。盤の上側（行 1・2）から始める。前は下。}
+
+kinds:
+  square:
+    base: area
+    text: 盤のマス。駒を 1 つまで置ける。
+    capacity: 1
+  piece:
+    base: object
+    text: 駒。持ち主（owner）の色。取られたら盤の外に出る。
+  king: {base: piece, name: キング, text: キング。8 方向に 1 マス。}
+  queen: {base: piece, name: クイーン, text: クイーン。8 方向に何マスでも（間に駒があれば止まる）。}
+  rook: {base: piece, name: ルーク, text: ルーク。縦横に何マスでも。}
+  bishop: {base: piece, name: ビショップ, text: ビショップ。斜めに何マスでも。}
+  knight: {base: piece, name: ナイト, text: ナイト。縦横 2・1 のずれのマスへ。間の駒を飛び越える。}
+  pawn: {base: piece, name: ポーン, text: ポーン。前に 1 マス（最初は 2 マスも可）。取るときは斜め前に 1 マス。}
+
+areas:
+  - id: board
+    name: 盤
+    text: 8×8。マスは s{列}{行}。列 1〜8 は a〜h、行 1 が黒の奥（ランク 8）、行 8 が白の奥（ランク 1）。
+    visibility: {face: all}
+    layout: {grid: [8, 8], child_kind: square, child_id: "s{col}{row}", origin: 左上}
+  - id: "taken-{player}"
+    for_each: {player: players}
+    name: 取った駒
+    owner: "{player}"
+    visibility: {face: all}
+
+table:
+  center: [board]
+  per_player: ["taken-{player}"]
+
+objects:
+  - {id: "wP{f}", kind: pawn, for_each: {f: [1, 2, 3, 4, 5, 6, 7, 8]}, owner: white, start: "s{f}7"}
+  - {id: "bP{f}", kind: pawn, for_each: {f: [1, 2, 3, 4, 5, 6, 7, 8]}, owner: black, start: "s{f}2"}
+  - {id: wK, kind: king, owner: white, start: s58}
+  - {id: wQ, kind: queen, owner: white, start: s48}
+  - {id: wR1, kind: rook, owner: white, start: s18}
+  - {id: wR2, kind: rook, owner: white, start: s88}
+  - {id: wN1, kind: knight, owner: white, start: s28}
+  - {id: wN2, kind: knight, owner: white, start: s78}
+  - {id: wB1, kind: bishop, owner: white, start: s38}
+  - {id: wB2, kind: bishop, owner: white, start: s68}
+  - {id: bK, kind: king, owner: black, start: s51}
+  - {id: bQ, kind: queen, owner: black, start: s41}
+  - {id: bR1, kind: rook, owner: black, start: s11}
+  - {id: bR2, kind: rook, owner: black, start: s81}
+  - {id: bN1, kind: knight, owner: black, start: s21}
+  - {id: bN2, kind: knight, owner: black, start: s71}
+  - {id: bB1, kind: bishop, owner: black, start: s31}
+  - {id: bB2, kind: bishop, owner: black, start: s61}
+  - {id: "wQ{n}", kind: queen, for_each: {n: [2, 3]}, owner: white, start: box}   # 成りに使う予備（箱）
+  - {id: "bQ{n}", kind: queen, for_each: {n: [2, 3]}, owner: black, start: box}
+
+actions:
+  - id: move
+    name: 駒を動かす（取る）
+    rule: R2
+    when: 自分の手番に 1 回。
+    params:
+      - {name: piece, from: board, kind: piece, owner: "{actor}"}
+      - name: to
+        in: board
+        kind: square
+        require:
+          - {expr: "not on1(value) or owner(on1(value)) != actor", text: 自分の駒がある}
+          - expr: "value in reach(piece)"
+            text: その駒の動きで届かない（アンパッサン・キャスリングは別のアクション）
+    steps:
+      - if: "on1(to)"
+        do:
+          - {op: move, obj: "top:{to}", to: "taken-{actor}"}
+      - {op: move, obj: "{piece}", to: "{to}"}
+  - id: en-passant
+    name: アンパッサンで取る
+    rule: R4
+    when: 相手のポーンが直前に 2 マス進み、自分のポーンの横に来たとき、その直後の手番だけ。
+    params:
+      - {name: pawn, from: board, kind: pawn, owner: "{actor}"}
+      - {name: target, from: board, kind: pawn, require: [{expr: "owner(value) != actor and where(value) in [step(where(pawn), 1, 0), step(where(pawn), -1, 0)]", text: 自分のポーンの横の相手のポーンではない}]}
+    steps:
+      - let: {to: "step(where(target), 0, -1 if actor == 'white' else 1)"}
+      - {op: move, obj: "{target}", to: "taken-{actor}"}
+      - {op: move, obj: "{pawn}", to: "{to}"}
+  - id: castle
+    name: キャスリング
+    rule: R5
+    when: キングとそのルークが一度も動いておらず、間に駒がなく、キングがチェックされておらず、通るマスが攻撃されていないとき。
+    params:
+      - {name: side, choices: [king, queen]}
+    let:
+      row: "8 if actor == 'white' else 1"
+    steps:
+      - let:
+          k: "'wK' if actor == 'white' else 'bK'"
+          r: "('wR2' if side == 'king' else 'wR1') if actor == 'white' else ('bR2' if side == 'king' else 'bR1')"
+          kto: "'s7' + str(row) if side == 'king' else 's3' + str(row)"
+          rto: "'s6' + str(row) if side == 'king' else 's4' + str(row)"
+      - {op: move, obj: "{k}", to: "{kto}"}
+      - {op: move, obj: "{r}", to: "{rto}"}
+  - id: promote
+    name: ポーンを成る
+    rule: R6
+    when: ポーンが相手の奥の行に着いたとき、その手の続きとして。クイーン以外にもなれる（予備がなければ取られた駒を使う）。
+    params:
+      - {name: pawn, from: board, kind: pawn, owner: "{actor}", require: [{expr: "pos(where(value))[1] == (0 if actor == 'white' else 7)", text: 奥の行にいない}]}
+      - {name: piece, kind: piece, owner: "{actor}", pick: first, require: [{expr: "where(value) in ['box', 'taken-' + ('black' if actor == 'white' else 'white')] and kind(value) != 'pawn' and kind(value) != 'king'", text: 盤の外の駒ではない}]}
+    steps:
+      - let: {sq: "where(pawn)"}
+      - {op: move, obj: "{pawn}", to: box}
+      - {op: move, obj: "{piece}", to: "{sq}"}
+  - id: finish
+    name: 終了する
+    rule: R7
+    params:
+      - {name: winner, players: true}
+    steps:
+      - {op: end, winner: "{winner}"}
+
+flow:
+  stages:
+    - {id: main, name: 対局, order: seats, turn: main}
+  turns:
+    main:
+      phases:
+        - {id: move, name: 指す, main: [move, en-passant, castle], max: 1, required: true, auto: true}
+      free:
+        - {action: promote}
+      reactions:
+        - {action: finish}
+  signals:
+    - {expr: "[p for p in players() if in_check(p)]", text: "{value} のキングがチェックされている（外す手しか指せない。R3）"}
+    - {expr: "repeats() >= 3", text: "同じ局面が 3 回目（引き分けを申し出られる。R7）"}
+
+functions:  # 名前つきの式（どの式からも呼べる。RUL-012 のループ 2）
+  lines:
+    params: [f, dirs]
+    expr: "[x for dx, dy in dirs for r in [ray(f, dx, dy)] for i, x in enumerate(r) if not any(on1(y) for y in r[:i])]"
+  attacks:
+    params: [piece]
+    expr: >-
+      [x for f in [where(piece)] for fw in [-1 if owner(piece) == 'white' else 1] for x in (
+        [step(f, dx, dy) for dx, dy in [(1,2),(2,1),(-1,2),(-2,1),(1,-2),(2,-1),(-1,-2),(-2,-1)]] if kind(piece) == 'knight' else
+        [step(f, dx, dy) for dx, dy in [(1,0),(-1,0),(0,1),(0,-1),(1,1),(1,-1),(-1,1),(-1,-1)]] if kind(piece) == 'king' else
+        [step(f, 1, fw), step(f, -1, fw)] if kind(piece) == 'pawn' else
+        lines(f, [(1,0),(-1,0),(0,1),(0,-1)] if kind(piece) == 'rook' else [(1,1),(1,-1),(-1,1),(-1,-1)] if kind(piece) == 'bishop'
+              else [(1,0),(-1,0),(0,1),(0,-1),(1,1),(1,-1),(-1,1),(-1,-1)])) if x]
+  reach:
+    params: [piece]
+    expr: >-
+      [x for x in attacks(piece) if kind(piece) != 'pawn' or on1(x)]
+      + ([x for f in [where(piece)] for fw in [-1 if owner(piece) == 'white' else 1]
+          for x in ([step(f, 0, fw)] if step(f, 0, fw) and not on1(step(f, 0, fw)) else [])
+          + ([step(f, 0, 2 * fw)] if pos(f)[1] == (6 if fw < 0 else 1) and not on1(step(f, 0, fw)) and not on1(step(f, 0, 2 * fw)) else [])]
+         if kind(piece) == 'pawn' else [])
+  attacked:
+    params: [sq, by]
+    expr: "any(sq in attacks(p) for p in parts_in('board', kind='piece', owner=by))"
+  in_check:
+    params: [p]
+    expr: "attacked(where('wK' if p == 'white' else 'bK'), 'black' if p == 'white' else 'white')"
+
+metrics:
+  - id: material
+    name: 取った駒の点
+    per: player
+    sum:
+      - {count: {in: "taken-{player}", kind: queen}, weight: 9}
+      - {count: {in: "taken-{player}", kind: rook}, weight: 5}
+      - {count: {in: "taken-{player}", kind: bishop}, weight: 3}
+      - {count: {in: "taken-{player}", kind: knight}, weight: 3}
+      - {count: {in: "taken-{player}", kind: pawn}, weight: 1}
+  - id: check
+    name: チェックされている
+    per: player
+    expr: "in_check(player)"
+    refs: [R3]
+
+rules:
+  - {id: R1, type: setup, text: 標準の初期配置。白が先手。, refs: [board, piece]}
+  - id: R2
+    type: turn
+    text: 手番のプレイヤーは自分の駒を 1 つ、その駒の動きで動かす。行き先に相手の駒があれば取る（盤の外へ）。パスはできない。
+    refs: [king, queen, rook, bishop, knight, pawn, "taken-{player}"]
+  - id: R3
+    type: always
+    text: 自分のキングが取られる状態（チェック）のまま手番を終える手は指せない。
+    refs: [king]
+  - {id: R4, type: action, text: アンパッサン。相手のポーンが 2 マス進んで自分のポーンの横に来た直後の手番に限り、通り過ぎたマスへ進んでそのポーンを取れる。, refs: [pawn]}
+  - {id: R5, type: action, text: キャスリング。キングを 2 マス横に動かし、その側のルークをキングの反対側の隣に置く。条件は action の when。, refs: [king, rook]}
+  - {id: R6, type: action, text: プロモーション。ポーンが奥の行に着いたら、キング以外の好きな駒に替える。, refs: [pawn]}
+  - id: R7
+    type: end
+    text: 相手のキングがチェックされ、どう指してもチェックを外せないとき（チェックメイト）は勝ち。指せる手がなくチェックでもないとき（ステイルメイト）や、駒が足りず詰ませられないときは引き分け。同じ局面（手番も同じ）が 3 回現れたら、引き分けを申し出られる。
+    refs: [king, R3]

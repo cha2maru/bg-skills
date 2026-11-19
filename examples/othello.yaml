@@ -1,0 +1,137 @@
+format: bg-def/0.1
+game:
+  id: othello
+  name: リバーシ（オセロ）
+  summary: >-
+    2 人が交互に、8×8 の盤の空いたマスに自分の色を上にして石を置き、相手の石を挟んで裏返す。
+    両者とも置けなくなったとき、自分の色の石が多い方が勝つ。
+  version: 1
+  players: {min: 2, max: 2}
+
+players:
+  - {id: black, name: 黒, text: 先手。石の黒い面を上にして置く。}
+  - {id: white, name: 白, text: 後手。石の白い面を上にして置く。}
+
+kinds:
+  square:
+    base: area
+    text: 盤のマス。石を 1 つまで置ける。
+    capacity: 1
+  disc:
+    base: object
+    name: 石
+    text: 片面が黒、片面が白の石。どちらの色の石かは上の面（状態 color）で決まり、持ち主は持たない。
+    states:
+      color:
+        black: {text: 黒の面が上。, show: {face: up}}
+        white: {text: 白の面が上。, show: {face: down}}
+
+areas:
+  - id: board
+    name: 盤
+    text: 8×8 のマス目。列 a〜h を 1〜8、行を 1〜8 で表す（s{col}{row}）。
+    visibility: {face: all}
+    layout: {grid: [8, 8], child_kind: square, child_id: "s{col}{row}", origin: 左上}
+  - id: supply
+    name: 石の置き場
+    text: まだ置いていない石。どちらの手番でも使う（石は共通）。
+    visibility: {face: all}
+
+table:
+  center: [board, supply]
+
+objects:
+  - {id: "D{copy}", kind: disc, copies: 60, start: supply, start_state: {color: black}}
+
+actions:
+  - id: setup
+    name: 中央に 4 つ置く
+    rule: R1
+    when: 対局の初めに 1 回。
+    steps:
+      - each: "['s44', 's55', 's45', 's54']"
+        as: c
+        do:
+          - {op: move, obj: "top:supply", to: "{c}"}
+          - let: {col: "'white' if c in ('s44', 's55') else 'black'"}
+          - {op: set, obj: "top:{c}", field: color, value: "{col}"}
+  - id: place
+    name: 石を置いて挟んだ石を裏返す
+    rule: R2
+    when: 自分の手番に 1 回。
+    params:
+      - name: cell
+        in: board
+        kind: square
+        require:
+          - {empty: true, text: 石がある}
+          - expr: >-
+              any(0 < n < len(r) and on1(r[n]) for r in [ray(value, dx, dy) for dx, dy in [(1,0),(-1,0),(0,1),(0,-1),(1,1),(1,-1),(-1,1),(-1,-1)]]
+                  for n in [next((i for i in range(len(r)) if not on1(r[i]) or state(on1(r[i]), 'color') == actor), len(r))])
+            text: 相手の石を 1 つも挟めない
+    steps:
+      - {op: move, obj: "top:supply", to: "{cell}"}
+      - {op: set, obj: "top:{cell}", field: color, value: "{actor}"}
+      - each: "[(1,0),(-1,0),(0,1),(0,-1),(1,1),(1,-1),(-1,1),(-1,-1)]"
+        as: dv
+        do:
+          - let:
+              r: "ray(cell, dv[0], dv[1])"
+          - let:
+              n: "next((i for i in range(len(r)) if not on1(r[i]) or state(on1(r[i]), 'color') == actor), len(r))"
+          - if: "0 < n < len(r) and on1(r[n])"
+            do:
+              - each: "[on1(x) for x in r[:n]]"
+                as: disc
+                do:
+                  - {op: set, obj: "{disc}", field: color, value: "{actor}"}
+  - id: pass
+    name: パスする
+    rule: R3
+    when: 置けるマスがないときだけ。
+    steps:
+      - {op: advance, to: turn}
+  - id: finish
+    name: 終了する
+    rule: R4
+    params:
+      - {name: winner, players: true}
+    steps:
+      - {op: end, winner: "{winner}"}
+
+flow:
+  stages:
+    - {id: setup, name: 準備, actions: [setup]}
+    - {id: main, name: 対局, order: seats, turn: main}
+  turns:
+    main:
+      phases:
+        - {id: move, name: 置く, main: [place, pass], max: 1, required: true, auto: true}
+      reactions:
+        - {action: finish}
+  end_when:
+    - {expr: "not count_in('supply') or all(count_in(c) for c in children('board'))", text: 盤が埋まったか石がない（両者とも置けないときも終わる。R4）}
+
+metrics:
+  - {id: discs, name: 石の数, badge: true, per: player, expr: "len([p for p in parts_in('board', kind='disc') if state(p, 'color') == player])", refs: [R4]}
+
+rules:
+  - id: R1
+    type: setup
+    text: 盤の中央の 4 マスに、黒と白を互い違いに置く（s44・s55 が白、s45・s54 が黒）。先手は黒。
+    refs: [board, disc]
+  - id: R2
+    type: turn
+    text: >-
+      手番のプレイヤーは、空いたマスに自分の色を上にして石を置く。置いたマスから 8 方向のいずれかに、
+      相手の石が 1 つ以上連続し、その先に自分の石があるとき、その間の相手の石をすべて裏返す。
+      1 つも裏返せないマスには置けない。
+    refs: [square, disc]
+  - id: R3
+    type: turn
+    text: 置けるマスがないときだけパスする。置けるマスがあるときはパスできない。
+    refs: [R2]
+  - id: R4
+    type: end
+    text: 両者とも置けなくなったら終わる。盤の上で自分の色が上の石が多い方が勝ち。同数なら引き分け。
+    refs: [disc, board]
