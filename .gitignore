@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.egg-info/
+.pytest_cache/
+# 既存ゲームの検証用定義は公開しない（RUL-001 #37）
+local/
+sessions/
+exports/
+status.md

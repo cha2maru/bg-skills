@@ -1,0 +1,435 @@
+"""bg コマンド：スキルから呼ぶスクリプト（SPC-003・006・010・014〜019・022）。結果は YAML で標準出力に出す。"""
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from collections import Counter
+from pathlib import Path
+
+import yaml
+
+from .definition import load
+from .session import OpError, Session
+from .tools import check_refs, diff, dump, rules_referencing
+from .view import view
+
+
+def _out(data):
+    sys.stdout.write(dump(data))
+
+
+def stats(sessions: list[Session]) -> dict:
+    """席ごとの勝敗・使われなかったルール・対局ごとの操作数（SPC-022）。"""
+    tally, used, ops = {}, set(), {}
+    rules = set()
+    for s in sessions:
+        log = s.log()
+        rules |= set(s.defn.rules)
+        used |= {o.get("rule") for o in log if o.get("rule")}
+        for o in log:
+            used |= set(o.get("rules") or [])
+        ops[s.dir.name] = len(log)
+        res = s.state()["result"]
+        for seat, r in ((res or {}).get("results") or {}).items():
+            tally.setdefault(seat, Counter())[r] += 1
+    return {"sessions": len(sessions), "results": {k: dict(v) for k, v in sorted(tally.items())},
+            "unused_rules": sorted(rules - used), "ops": ops}
+
+
+
+def _group(items):
+    """同じ種類・名前・状態で、上に何もない部品を「名前 ×n（ID の範囲）」にまとめる。"""
+    out, seen = [], {}
+    for it in items:
+        if "id" in it and "count" not in it and not it.get("stacked") and not it.get("attached"):
+            key = (it.get("kind"), it.get("title"), it.get("owner"), json.dumps([it.get("state"), it.get("attributes")], sort_keys=True))
+            if key in seen:
+                g = seen[key]
+                g["count"] = g.get("count", 1) + 1
+                g["ids"].append(it["id"])
+                continue
+            g = {**it, "ids": [it["id"]]}
+            seen[key] = g
+            out.append(g)
+        else:
+            out.append(it)
+    def slim(x):  # 既定の表示（回転 0・表）と、局面の持ち主の重複・画像は省く
+        if x.get("display") == {"rotate": 0, "face": "up"}:
+            x.pop("display")
+        x.pop("image", None)
+        x.pop("shape", None)
+        x.pop("back_image", None)
+        for y in x.get("stacked") or []:
+            slim(y)
+    for g in out:
+        slim(g)
+        if "ids" in g:
+            if len(g["ids"]) == 1:
+                g.pop("ids")
+            else:
+                g.pop("id", None)  # ID は全部並べる（2 枚目以降を選ぶのに candidates を引かずに済む）
+    return out
+
+
+TALK_TAIL = 10
+
+
+def _title(d, i):
+    x = d.parts.get(i) or d.areas.get(i)
+    return x and ((x.get("attributes") or {}).get("title") or x.get("name"))
+
+
+def _visible_ops(s, state, ops, player):
+    """操作の記録を、player から今見えない部品の ID を伏せて返す。出目などの結果を添える。"""
+    from .metrics import _area_of, _face_visible
+    out = []
+    secret = {a["id"] for a in s.defn.data.get("actions") or [] if a.get("secret")}
+    for o in ops:
+        o = dict(o)
+        if player and o.get("by") != player and o.get("action") in secret:  # 非公開の行為（人狼の夜の行動）は、あったことも件数も見せない
+            continue
+        if player and o.get("op") == "say" and o.get("to") is not None and o.get("by") != player and player not in (
+                [o["to"]] if isinstance(o["to"], str) else o["to"]):
+            if o.get("hidden"):  # 夜の内緒話など：あったことも見せない
+                continue
+            o["text"] = "（内緒話）"
+            o.pop("offer", None)
+        obj = o.get("obj")
+        if player and isinstance(obj, str) and obj in s.defn.parts and s.defn.distinct(obj):
+            where = next((c for c, items in state["places"].items() if obj in items), None)
+            area = _area_of(s.defn, state, where) if where else None
+            if area and not _face_visible(s.defn, state, obj, area, player):
+                o["obj"] = "（見えない部品）"
+                if "value" in o and o.get("op") in ("set", "flip", "rotate"):  # 伏せた紙に書いた値（封をした投票）も伏せる
+                    o["value"] = "（見えない）"
+        elif player and isinstance(obj, str) and obj in s.defn.parts and o.get("by") != player:
+            # 区別しない部品（資源など）：移る元か先の表面が見えなければ種類を伏せる（取った札は当事者だけが知る）
+            from .view import _allowed, visibility
+            ends = [_area_of(s.defn, state, x) for x in (o.get("from"), o.get("to")) if x]
+            if ends and not any(a in s.defn.areas and _allowed(visibility(s.defn, a)["face"], player, s.defn.areas[a].get("owner"))
+                                for a in ends):
+                o["obj"] = "（見えない部品）"
+        if o.get("op") == "roll" and obj in state["states"]:
+            o["result"] = state["states"][obj]
+        out.append(o)
+    return out
+
+
+def main(argv=None):
+    p = argparse.ArgumentParser(prog="bg", description="ボードゲームの定義と対局を扱う")
+    sub = p.add_subparsers(dest="cmd", required=True)
+    c = sub.add_parser("check", help="参照先が存在するかを確かめる")
+    c.add_argument("definition")
+    c = sub.add_parser("expand", help="略記を展開した形を出す")
+    c.add_argument("definition")
+    c.add_argument("--players", type=int)
+    c = sub.add_parser("refs", help="ID を参照するルールを引く")
+    c.add_argument("definition")
+    c.add_argument("id")
+    c = sub.add_parser("diff", help="2 つの版の違い")
+    c.add_argument("old")
+    c.add_argument("new")
+    c = sub.add_parser("new", help="対局を作る")
+    c.add_argument("session")
+    c.add_argument("--def", dest="definition", required=True)
+    c.add_argument("--players", type=int, required=True)
+    c.add_argument("--seat", action="append", default=[], help="P1=agent:a のように席と着席者")
+    c.add_argument("--seed", type=int, default=0)
+    c.add_argument("--from-box", action="store_true", help="すべての部品が箱に入った状態から始める（準備の手順を確かめる）")
+    c.add_argument("--strict", action="store_true", default=None, help="厳格モード：条件・進行から外れた行為を受け付けない（省くと定義の game.strict）")
+    c.add_argument("--lenient", dest="strict", action="store_false", help="定義が厳格を既定にしていても、警告だけにする（試し遊び・キーパーの手直し）")
+    c.set_defaults(strict=None)
+    c.add_argument("--scenario", help="対局ごとの非公開の設定（脚本など）。対局のフォルダに写す")
+    c = sub.add_parser("setup-check", help="局面を定義の初期の置き場と比べる")
+    c.add_argument("session")
+    c = sub.add_parser("op", help="操作を 1 つ行い記録する。JSON で渡す")
+    c.add_argument("session")
+    c.add_argument("json", help='例: {"op":"move","obj":"N4","to":"discard","by":"P2","rule":"R4"}')
+    c = sub.add_parser("act", help="定義のアクションを行う（手順をすべて行うか、1 つも行わない）")
+    c.add_argument("session")
+    c.add_argument("action")
+    c.add_argument("--by", help="行う人（プレイヤー）。キーパーだけが行うアクションなら省ける")
+    c.add_argument("--arg", action="append", default=[], help="card=W5-2 のように選ぶもの")
+    c = sub.add_parser("advance", help="進行を次へ（フェーズ・手番・段階）。ワザを使わずに手番を終えるときなど")
+    c.add_argument("session")
+    c.add_argument("--to", default="phase", choices=["phase", "turn", "stage"])
+    c.add_argument("--by", default="keeper")
+    c = sub.add_parser("say", help="発言する（記録に残る。--to で聞かせる相手を絞る＝内緒話）")
+    c.add_argument("session")
+    c.add_argument("text")
+    c.add_argument("--by", required=True, help="話す人（プレイヤーか keeper）")
+    c.add_argument("--to", help="聞かせる相手（カンマ区切り）。省くと全員")
+    c.add_argument("--offer", help='提案（守られる約束）：受けたらまとめて行う操作の JSON のリスト。例 \'[{"op":"move","obj":"wood","from":"hand-P1","to":"hand-P2","n":2}]\'')
+    c.add_argument("--reply-to", type=int, help="条件を変えて返す元の提案（発言の番号）。元の提案は閉じる")
+    c.add_argument("--action", help="提案が成立したら、出した人がこのアクションを行ったことにする（手番・回数・条件を確かめる。省くと flow.offer_action）")
+    c = sub.add_parser("answer", help="提案に答える（受けると中身をすべて行う。出した人が --decline すると取り下げ）")
+    c.add_argument("session")
+    c.add_argument("talk", type=lambda x: int(x) if x.isdigit() else x, help="提案の発言の番号（bg show の talk の n。夜の内緒話は h0 など）")
+    c.add_argument("--by", required=True)
+    c.add_argument("--decline", action="store_true", help="断る（出した人なら取り下げる）")
+    c = sub.add_parser("show", help="局面を出す")
+    c.add_argument("session")
+    c.add_argument("--as", dest="player", help="このプレイヤーの見え方（省略時はキーパー）")
+    c.add_argument("--meaning", action="store_true", help="意味の文と関係するルールを添える")
+    c.add_argument("--compact", action="store_true", help="空のエリアを省く")
+    c.add_argument("--links", action="store_true", help="各エリアのリンク（つながる先と種類）を添える")
+    c.add_argument("--only", help="出すエリア（子のエリアも）と局面の部分（talk・flow・metrics・progress・offers_for_me・catalog など）をカンマ区切りで")
+    c.add_argument("--talk-since", type=int, help="この番号からの発言だけ出す（--compact の既定は最後の 10 件と受付中の提案）")
+    c = sub.add_parser("log", help="操作の記録")
+    c.add_argument("session")
+    c.add_argument("--as", dest="player", help="このプレイヤーから見えない部品の ID を伏せる")
+    c = sub.add_parser("near", help="エリアのリンク先と、その中身")
+    c.add_argument("session")
+    c.add_argument("id")
+    c.add_argument("--type", help="リンクの種類で絞る")
+    c.add_argument("--as", dest="player")
+    c = sub.add_parser("candidates", help="アクションの引数の候補と、条件を満たすか")
+    c.add_argument("session")
+    c.add_argument("action")
+    c.add_argument("--by", required=True)
+    c.add_argument("--param", help="省くと全部の引数")
+    c.add_argument("--arg", action="append", default=[], help="先に決めた引数（char=C01 など）")
+    c = sub.add_parser("complexity", help="ルールの複雑さの目安（ルール・アクション・条件・式の大きさ・機械で確かめないルール）")
+    c.add_argument("definition")
+    c.add_argument("--players", type=int)
+    c = sub.add_parser("selfplay", help="作品を問わないでたらめの対戦（今行える手から選ぶ）で、終わり方の偏りと局の長さの目安を出す")
+    c.add_argument("definition")
+    c.add_argument("--players", type=int, required=True)
+    c.add_argument("--games", type=int, default=20)
+    c.add_argument("--max-turns", type=int, default=60)
+    c.add_argument("--seed", type=int, default=0)
+    c = sub.add_parser("pass", help="スタックの解決を見送る（積んだ人以外の全員が見送ると一番上を解決する）")
+    c.add_argument("session")
+    c.add_argument("--by", required=True)
+    c = sub.add_parser("resolve", help="スタックの一番上を解決する（キーパー。見送りを待たない）")
+    c.add_argument("session")
+    c.add_argument("--by", default="keeper")
+    c = sub.add_parser("fuzz", help="でたらめ実行：アクションと引数をでたらめに選んで、式の誤り・エンジンの不具合・一度も行えないアクションを探す")
+    c.add_argument("definition")
+    c.add_argument("--players", type=int, required=True)
+    c.add_argument("--games", type=int, default=3)
+    c.add_argument("--steps", type=int, default=80)
+    c.add_argument("--seed", type=int, default=0)
+    c = sub.add_parser("rebase", help="定義を直した後、記録が今の定義で再生できるか確かめ、対局を今の定義に合わせる")
+    c.add_argument("session")
+    c = sub.add_parser("undo", help="最後の操作（アクションならその全部）を取り消す")
+    c.add_argument("session")
+    c = sub.add_parser("serve", help="対局を画面で見て、さわる（http://127.0.0.1:8765/）")
+    c.add_argument("session")
+    c.add_argument("--host", default="127.0.0.1")
+    c.add_argument("--port", type=int, default=8765)
+    c = sub.add_parser("tts", help="局面を Tabletop Simulator の Saved Object（JSON）に書き出す")
+    c.add_argument("session")
+    c.add_argument("--out", required=True, help="例: .../Tabletop Simulator/Saves/Saved Objects/kagaribi.json")
+    c = sub.add_parser("stats", help="対局の記録を集計する")
+    c.add_argument("sessions", nargs="+")
+    a = p.parse_args(argv)
+    try:
+        if a.cmd == "check":
+            bad = check_refs(load(a.definition))
+            _out({"missing_refs": bad})
+            return 1 if bad else 0
+        if a.cmd == "expand":
+            _out(load(a.definition, a.players).data)
+        elif a.cmd == "refs":
+            _out({a.id: rules_referencing(load(a.definition), a.id)})
+        elif a.cmd == "diff":
+            _out(diff(load(a.old), load(a.new)))
+        elif a.cmd == "new":
+            seats = dict(s.split("=", 1) for s in a.seat)
+            s = Session.create(a.session, a.definition, a.players, seats, a.seed, a.from_box, a.strict, a.scenario)
+            _out({"session": str(s.dir), **s.meta})
+        elif a.cmd == "op":
+            s = Session(a.session)
+            st = s.apply(json.loads(a.json))
+            from .flow import summary
+            fl = summary(s.defn, st.get("flow"), None)
+            _out({"ok": True, "seq": len(s.log()), **({"warnings": s.last_warnings} if s.last_warnings else {}), **({"flow": fl} if fl else {})})
+        elif a.cmd == "advance":
+            s = Session(a.session)
+            s.apply({"op": "advance", "to": a.to, "by": a.by})
+            from .flow import summary
+            _out({"ok": True, **({"warnings": s.last_warnings} if s.last_warnings else {}), "flow": summary(s.defn, s.state().get("flow"), None)})
+        elif a.cmd == "say":
+            s = Session(a.session)
+            s.apply({"op": "say", "by": a.by, "text": a.text, **({"to": a.to.split(",")} if a.to else {}),
+                     **({"offer": json.loads(a.offer)} if a.offer else {}), **({"reply_to": a.reply_to} if a.reply_to is not None else {}), **({"action": a.action} if a.action else {})})
+            _out({"ok": True, "talk": s.state()["talk"][-1].get("n"), **({"warnings": s.last_warnings} if s.last_warnings else {})})
+        elif a.cmd == "answer":
+            s = Session(a.session)
+            s.apply({"op": "answer", "by": a.by, "talk": a.talk, "accept": not a.decline})
+            _out({"ok": True, **({"warnings": s.last_warnings} if s.last_warnings else {})})
+        elif a.cmd == "setup-check":
+            from .session import compare_to_start
+            s = Session(a.session)
+            _out(compare_to_start(s.defn, s.state()))
+        elif a.cmd == "act":
+            s = Session(a.session)
+            if not a.by:  # キーパーだけが行うアクションなら --by を省ける
+                act = next((x for x in s.defn.data.get("actions") or [] if x["id"] == a.action), {})
+                if act.get("by") != ["keeper"]:
+                    raise OpError("--by（行う人）がいる")
+                a.by = "keeper"
+            st = s.act(a.action, a.by, dict(x.split("=", 1) for x in a.arg))
+            done = _visible_ops(s, st, s.last_ops, None if a.by == "keeper" else a.by)  # 結果（出目・引いたもの）を、行った人の見え方で返す
+            from .flow import summary
+            fl = summary(s.defn, st.get("flow"), a.by if a.by in s.defn.players else None)
+            _out({"ok": True, "seq": len(s.log()), "done": done, **({"warnings": s.last_warnings} if s.last_warnings else {}),
+                  **({"flow": fl} if fl else {})})
+        elif a.cmd == "show":
+            s = Session(a.session)
+            v = view(s.defn, s.state(), a.player, a.meaning, s.meta["seats"])
+            if a.links:
+                from .query import neighbors
+                for aid, e in v["areas"].items():
+                    nb = neighbors(s.defn, aid)
+                    if nb:
+                        e["links"] = [f"{o}（{t}）" for o, t in nb]
+            parts = None
+            if a.only:
+                want = [w for w in a.only.split(",") if w in s.defn.areas]
+                parts = {w for w in a.only.split(",") if w not in s.defn.areas}  # 局面の部分（talk・flow など）
+                bad = parts - set(v) - {"catalog", "offers_for_me", "talk_omitted", "talk", "flow", "metrics", "progress", "stack", "stack_waiting", "stack_done"}
+                if bad:
+                    raise OpError(f"--only の {', '.join(sorted(bad))} はエリアでも局面の部分でもない（部分：{', '.join(k for k in v if k not in ('for', 'game', 'version'))}）")
+                under = lambda x: any(x == w or s.defn.parent.get(x) == w or s.defn.parent.get(s.defn.parent.get(x) or "") == w for w in want)
+                v["areas"] = {k: e for k, e in v["areas"].items() if under(k)}
+            if a.compact:  # 空で子もリンクもないエリアを省き、同じ種類・状態の部品をまとめる
+                v["areas"] = {k: {**e, **({"shown": _group(e["shown"])} if isinstance(e.get("shown"), list) else {})}
+                              for k, e in v["areas"].items() if e.get("shown") not in ([], None) or e.get("children")}
+                for e in v["areas"].values():
+                    e.pop("children", None)
+                catalog = {}  # 表や一覧の属性（ワザの全文など）は、名前ごとに 1 回だけ catalog に出す
+
+                def lift(x, parent_owner=None):
+                    kind = x.get("kind")
+                    if isinstance(x.get("state"), dict) and kind in s.defn.kinds:  # 表裏の項目が既定（最初に書いた値＝表）なら省く
+                        faces, defs = s.defn.face_fields(kind), s.defn.states(kind)
+                        x["state"] = {f: val for f, val in x["state"].items()
+                                      if f not in faces or not isinstance(defs.get(f), dict) or val != next(iter(defs[f]), None)}
+                        if not x["state"]:
+                            x.pop("state")
+                    if parent_owner and x.get("owner") == parent_owner:
+                        x.pop("owner")  # 上に重ねた物の持ち主が、下の物と同じなら省く
+                    big = {k: val for k, val in (x.get("attributes") or {}).items() if isinstance(val, (list, dict))}
+                    if big:
+                        catalog.setdefault(x.get("title") or x.get("kind"), big)
+                        x["attributes"] = {k: val for k, val in x["attributes"].items() if k not in big}
+                        if not x["attributes"]:
+                            x.pop("attributes")
+                    for y in x.get("stacked") or []:
+                        lift(y, x.get("owner") or parent_owner)
+                for e in v["areas"].values():
+                    for x in e.get("shown") or [] if isinstance(e.get("shown"), list) else []:
+                        lift(x)
+                if catalog:
+                    v["catalog"] = catalog
+            if v.get("talk") and (a.compact or a.talk_since is not None):  # 発言が長い対局（人狼の議論）で毎回全件を出さない
+                T = v["talk"]
+                if a.talk_since is None:
+                    start = max(0, len(T) - TALK_TAIL)
+                else:  # 番号 N 以降（見せない内緒話の番号 hN は、並びの位置で含める）
+                    start = next((i for i, t in enumerate(T) if isinstance(t.get("n", i), int) and t.get("n", i) >= a.talk_since), len(T))
+                last_keeper = max((i for i, t in enumerate(v["talk"]) if t.get("by") in (None, "keeper")), default=None)  # 最後の告知（朝になった、など）は残す
+                keep = [{"n": i, **t} for i, t in enumerate(T) if i >= start or t.get("status") == "open" or i == last_keeper]
+                if len(keep) < len(v["talk"]):
+                    v["talk_omitted"] = f"{len(v['talk']) - len(keep)} 件を省いた（--talk-since 0 で全件）"
+                v["talk"] = keep
+            if parts is not None:  # --only：頭（for・game・version）と、指定したエリア・部分だけ
+                if "stack" in parts:
+                    parts |= {"stack_waiting", "stack_done"}
+                v = {k: x for k, x in v.items() if k in ("for", "game", "version") or k in parts
+                     or (k == "areas" and (want or not parts)) or (k == "talk_omitted" and "talk" in parts)}
+            _out(v)
+        elif a.cmd == "log":
+            s = Session(a.session)
+            if not a.player:
+                _out(s.log())
+            else:  # 伏せるかは、その操作の直後の局面の見え方で決める（後で公開された札から、昔の手札を明かさない）
+                from .session import apply_op, initial_state
+                st, out = initial_state(s.defn, s.meta.get("start") == "box"), []
+                for i, o in enumerate(s.log(), 1):
+                    st = apply_op(s.defn, st, o, s.meta["seed"], i)
+                    out += _visible_ops(s, st, [o], a.player)
+                _out(out)
+        elif a.cmd == "near":
+            from .query import neighbors
+            s = Session(a.session)
+            v = view(s.defn, s.state(), a.player)
+            _out({a.id: [{"to": o, "type": t, "shown": (v["areas"].get(o) or {}).get("shown")} for o, t in neighbors(s.defn, a.id, a.type)]})
+        elif a.cmd == "candidates":
+            from .query import candidates, check_action
+            s = Session(a.session)
+            act = next((x for x in s.defn.data.get("actions") or [] if x["id"] == a.action), None)
+            if act is None:
+                raise OpError(f"アクション {a.action} は定義にない")
+            args = dict(x.split("=", 1) for x in a.arg)
+            st = s.state()
+            ap = check_action(s.defn, st, act, {"actor": a.by, "player": a.by, **args})
+            names = [a.param] if a.param else [p["name"] for p in act.get("params") or [] if p["name"] not in args]
+            if ap and a.by in s.defn.players:  # 行えない人には引数の条件を見せない（条件は隠れた情報を読むことがある：人狼の襲撃先）
+                names = []
+            out = {}
+            acts = {x["id"]: x.get("name", x["id"]) for x in s.defn.data.get("actions") or []}
+            stk = {str(e["n"]): f"{e['by']} の {acts.get(e['action'], e['action'])}" + (f"（{'・'.join(map(str, e['args'].values()))}）" if e["args"] else "")
+                   for e in st.get("stack") or []}
+            for n in names:  # 候補に名前（title）を添える。スタックの番号には、誰の何か
+                out[n] = [{**c, **({"title": t} if (t := stk.get(c["id"]) or _title(s.defn, c["id"])) else {})}
+                          for c in candidates(s.defn, st, a.action, a.by, n, args)]
+                prm = next(p for p in act.get("params") or [] if p["name"] == n)
+                if not out[n] and not prm.get("free"):
+                    ap = ap + [f"{n} の候補がない"]
+            _out({**out, "action_problems": ap})
+        elif a.cmd in ("pass", "resolve"):
+            s = Session(a.session)
+            before = s.state()
+            st = s.apply({"op": a.cmd, "by": getattr(a, "by", None) or "keeper"})
+            if a.cmd == "pass" and len(st.get("stack_done") or []) == len(before.get("stack_done") or []):
+                from .session import _stack_next
+                if st.get("stack") and _stack_next(s.defn, st)["by"] == a.by:
+                    s.last_warnings = (s.last_warnings or []) + ["積んだ本人なので、見送りは要らない（相手の見送りを待つ）"]
+            _out({"ok": True, **({"warnings": s.last_warnings} if s.last_warnings else {}),
+                  "stack": [{"n": e["n"], "action": e["action"], "by": e["by"]} for e in st.get("stack") or []],
+                  **({"resolved": st["stack_done"][-1]} if a.cmd == "resolve" or not st.get("stack_passes") and st.get("stack_done") else {})})
+        elif a.cmd == "complexity":
+            from .tools import complexity
+            _out(complexity(load(a.definition, a.players)))
+        elif a.cmd == "selfplay":
+            from .tools import selfplay
+            _out(selfplay(a.definition, a.players, a.games, a.max_turns, a.seed))
+        elif a.cmd == "fuzz":
+            from .tools import fuzz
+            r = fuzz(a.definition, a.players, a.games, a.steps, a.seed)
+            _out(r)
+            if r["crashes"] or r["expr_errors"]:
+                sys.exit(1)
+        elif a.cmd == "rebase":
+            _out({"ok": True, "replayed": Session(a.session).rebase()})
+        elif a.cmd == "undo":
+            s = Session(a.session)
+            removed = s.undo()
+            by = next((o.get("by") for o in removed if o.get("by") in s.defn.players), None)
+            _out({"undone": _visible_ops(s, s.state(), removed, by)})  # 取り消した人の見え方で（隠れた部品を明かさない）
+        elif a.cmd == "serve":
+            from .server import serve
+            Session(a.session)  # 開けない対局なら画面を立てる前に止める
+            serve(a.session, a.host, a.port)
+        elif a.cmd == "tts":
+            from .tts import export
+            s = Session(a.session)
+            data = export(s.defn, s.state(), Path(a.out), s.meta["seats"])
+            _out({"out": a.out, "objects": len(data["ObjectStates"])})
+        elif a.cmd == "stats":
+            _out(stats([Session(x) for x in a.sessions]))
+        if getattr(a, "session", None) and a.cmd != "new":
+            for w in Session(a.session).load_warnings:
+                sys.stderr.write(f"warning: {w}\n")
+    except (ValueError, KeyError, FileNotFoundError, yaml.YAMLError) as e:  # DefinitionError・OpError・式の誤り・JSON の誤りも ValueError
+        sys.stderr.write(f"error: {e}\n")
+        return 2
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

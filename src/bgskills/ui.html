@@ -1,0 +1,806 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>bg テーブル</title>
+<style>
+/* 卓（左）・調べる（中）・ルールと記録（右）の 3 列。狭いと縦に積む */
+:root{
+  --bg:#eef1ec; --table:#2f5d47; --table-ink:#e8f1ec; --area:#f7f8f4; --area-line:#c9d2c8;
+  --card:#ffffff; --card-line:#b9c2b8; --back:#5b4630; --back-ink:#f1e6d6;
+  --fg:#1d241f; --muted:#5a6660; --accent:#1f6b4a; --accent-soft:#e3efe8; --warn:#a5432b; --warn-soft:#f7e6e0;
+  --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#121614; --table:#1c3a2c; --table-ink:#d7e6dd; --area:#1a201d; --area-line:#33403a;
+  --card:#242c28; --card-line:#3d4a43; --back:#4a3826; --back-ink:#ead9c2;
+  --fg:#e4e9e5; --muted:#9aa6a0; --accent:#5fbf92; --accent-soft:#1d3329; --warn:#e98a70; --warn-soft:#3a221b; color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.6 system-ui,"Hiragino Sans","Noto Sans JP",sans-serif}
+header{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;padding:10px 16px;background:var(--table);color:var(--table-ink)}
+header button{background:transparent;color:var(--table-ink);border:1px solid color-mix(in srgb, var(--table-ink) 45%, transparent);border-radius:6px;padding:2px 10px;cursor:pointer;font:inherit}
+header button[aria-pressed="false"]{opacity:.65;text-decoration:line-through}
+header h1{font-size:16px;margin:0 8px 0 0}
+header label{display:flex;gap:6px;align-items:center;font-size:13px}
+select,input,button{font:inherit;color:inherit}
+header select,header input{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.3);border-radius:4px;padding:2px 6px;color:var(--table-ink)}
+header option{color:#1d241f}
+#showmenu{position:relative;font-size:13px}
+#showmenu summary{cursor:pointer}
+#showopts{position:absolute;z-index:20;top:1.8em;left:0;background:var(--area);color:var(--fg);border:1px solid var(--area-line);border-radius:6px;padding:8px 10px;display:flex;flex-direction:column;gap:4px;white-space:nowrap}
+/* 表示の切り替え（SPC-049）：既定は名前だけ。body のクラスで出す。選んだカードは状態を出す */
+body:not(.show-ids) .card .cid, body:not(.show-ids) .chip .pid{display:none}
+body:not(.show-states) .card .badge.st{display:none}
+body:not(.show-vis) .card .badge.vis{display:none}
+body:not(.show-orient) .card .orient{display:none}
+body:not(.show-meta) .area>.head .meta,body:not(.show-meta) .polyin>.head .meta{display:none}
+body:not(.show-hidden) .area>.head .hid{display:none}
+body:not(.show-help) .helpline{display:none}
+.card.sel .badge.st{display:inline-block!important}
+main{display:grid;grid-template-columns:minmax(0,1fr) 300px 340px;gap:12px;padding:12px 16px;align-items:start}
+@media (max-width:1100px){main{grid-template-columns:1fr}}
+.panel{background:var(--area);border:1px solid var(--area-line);border-radius:8px;padding:10px 12px;min-width:0}
+.panel h2{font-size:13px;margin:0 0 8px;color:var(--muted);letter-spacing:.04em}
+#table{position:relative;display:flex;flex-direction:column;gap:10px}
+/* 卓：中央に共有のエリア、周りに席。見る立場のプレイヤーが手前（下） */
+.tablegrid{display:grid;gap:10px}
+.cell{display:flex;flex-direction:column;gap:8px;min-width:0}
+.cell.top,.cell.bottom{flex-direction:row;flex-wrap:wrap;align-items:flex-start}   /* 上下の辺に席が複数（5 人以上）なら横に並べる */
+.cell.top>.seat,.cell.bottom>.seat{flex:1 1 160px;min-width:0}
+body.hide-inspect #inspect,body.hide-side #sidepanel{display:none}
+body.hide-inspect main{grid-template-columns:minmax(0,1fr) 340px}
+body.hide-side main{grid-template-columns:minmax(0,1fr) 300px}
+body.hide-inspect.hide-side main{grid-template-columns:minmax(0,1fr)}
+.cell.center{background:color-mix(in srgb, var(--table) 14%, transparent);border-radius:10px;padding:8px}
+.seat{border-radius:10px;padding:6px 8px 8px;background:color-mix(in srgb, var(--accent) 7%, transparent);display:flex;flex-direction:column;gap:6px}
+.seat>.label{font-size:12px;font-weight:600;color:var(--accent);display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline}
+.mbadge{font-weight:500;font-size:11.5px;color:var(--fg);background:var(--card);border:1px solid var(--area-line);border-radius:999px;padding:0 8px}
+.seat .kids{flex-direction:column;flex-wrap:nowrap}   /* 席の中の子エリアは中央に近い順に縦へ */
+.seat.top .kids{flex-direction:column-reverse}       /* 対面は中央に近いものを下に */
+.seat.me>.label::after{content:"（あなた）";font-weight:400;color:var(--muted)}
+.outside>h3{font-size:12px;color:var(--muted);margin:4px 0}
+#actions{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:10px;padding:8px 10px;border-radius:8px;background:var(--accent-soft)}
+#actions .who{font-size:12px;color:var(--accent);font-weight:600;margin-right:4px}
+#actions form{display:flex;flex-wrap:wrap;gap:6px;align-items:center;width:100%;padding-top:6px;border-top:1px solid var(--area-line)}
+#actions .flowline{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;width:100%;font-size:12.5px;padding-bottom:6px;border-bottom:1px solid var(--area-line)}
+#actions .phases{display:flex;gap:4px}
+#actions .ph{padding:0 8px;border-radius:999px;border:1px solid var(--area-line);color:var(--muted)}
+#actions .ph.now{background:var(--accent);border-color:var(--accent);color:#fff}
+#actions .glabel{font-size:11px;color:var(--muted);margin-left:6px}
+#actions button.dim{opacity:.55}
+#actions details.others{display:inline-flex;flex-wrap:wrap;gap:6px;align-items:center}
+#actions details.others summary{font-size:12px;color:var(--muted);cursor:pointer}
+#actions .rid{font-family:var(--mono);font-size:10.5px;opacity:.7;margin-left:4px}
+.hexscroll{overflow-x:auto;padding:6px 0}
+.hexwrap{position:relative}
+.area.hexcell{position:absolute;padding:14px 4px 4px;border:none;background:var(--area-line);clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%);display:flex;flex-direction:column;align-items:center}
+.area.hexcell::before{content:"";position:absolute;inset:2px;background:var(--area);clip-path:inherit;z-index:-1}
+.area.hexcell{isolation:isolate}
+.area.hexcell.drop::before{background:var(--accent-soft)}
+.area.hexcell>.head{justify-content:center}
+.area.hexcell>.head b,.area.hexcell .hid{display:none}
+.area.hexcell .items{min-height:0;justify-content:center;padding:0}
+.area.hexcell .empty{display:none}
+.area.hexcell .card{width:46px;min-height:40px;font-size:10px;padding:2px 3px}
+.area.hexcell .card .badges,.area.hexcell .card .orient{display:none}
+.area.hexvertex,.area.hexedge{position:absolute;padding:0;border:1px solid var(--muted);background:var(--card);z-index:2;display:flex;align-items:center;justify-content:center;overflow:visible}
+.area.hexvertex{width:16px;height:16px;border-radius:50%;transform:translate(-50%,-50%)}
+.area.hexedge{width:26px;height:8px;border-radius:3px;opacity:.85}
+.area.hexvertex>.head,.area.hexedge>.head{position:absolute;inset:0;opacity:0}
+.area.hexvertex .items,.area.hexedge .items{min-height:0;padding:0;gap:0}
+.area.hexvertex .empty,.area.hexedge .empty,.area.hexvertex .hid,.area.hexedge .hid{display:none}
+.area.hexvertex .card,.area.hexedge .card{width:20px;min-height:20px;padding:0;font-size:9px;overflow:hidden}
+.area.hexvertex .card .cid,.area.hexvertex .card .badges,.area.hexvertex .card .orient,.area.hexedge .card .cid,.area.hexedge .card .badges,.area.hexedge .card .orient{display:none}
+svg.links{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
+svg.links line{stroke:var(--warn);stroke-width:2;stroke-dasharray:5 4;opacity:.75}
+svg.links text{fill:var(--warn);font-size:11px;paint-order:stroke;stroke:var(--bg);stroke-width:3px}
+.area{border:1px dashed var(--area-line);border-radius:8px;padding:6px 8px 8px;background:var(--area);min-width:0}
+.area.drop{outline:2px solid var(--accent);background:var(--accent-soft)}
+.area.sel{border-style:solid;border-color:var(--accent)}
+.area>.head{display:flex;gap:6px;align-items:baseline;cursor:pointer;font-size:12.5px}
+.area>.head b{font-size:13px}
+.area>.head .fold{cursor:pointer;width:1em;display:inline-block;color:var(--muted)}
+.area>.head .id{font-family:var(--mono);color:var(--muted);font-size:11px}
+.area>.head .hid{color:var(--warn);font-size:11px}
+.items{display:flex;flex-wrap:wrap;align-items:flex-start;gap:6px;min-height:34px;padding-top:4px}
+.kids{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.kids.grid{display:grid;gap:6px}
+/* カードは縦長（縦向き）が基本。横向き（タップなど）は横長の形に変えて、ひと目で分かるようにする */
+.card{position:relative;width:84px;min-height:116px;border:1px solid var(--card-line);border-radius:6px;background:var(--card);padding:4px 6px;cursor:grab;font-size:12px;line-height:1.35;user-select:none;transition:width .15s,min-height .15s}
+.card.side{width:116px;min-height:84px}
+.card .orient{position:absolute;right:4px;bottom:3px;font-size:10px;opacity:.7}
+.card.sel{outline:2px solid var(--accent)}
+.card.drop{outline:2px dashed var(--accent)}
+.ghost{position:fixed;pointer-events:none;opacity:.85;z-index:10;box-shadow:0 4px 12px rgba(0,0,0,.25)}
+.card,.chip{touch-action:none}
+.card.down{background:var(--back);color:var(--back-ink);border-color:var(--back)}
+
+.card .cid{font-family:var(--mono);font-size:10.5px;opacity:.75}
+.card .badges{display:flex;flex-wrap:wrap;gap:2px;margin-top:2px}
+.card .badge{font-size:10px;padding:0 4px;border-radius:3px;background:var(--accent-soft);color:var(--accent)}
+.card .badge.at{font-weight:700}
+.card.down .badge{background:rgba(255,255,255,.15);color:var(--back-ink)}
+.card.hidden{cursor:default;background:var(--back);color:var(--back-ink);text-align:center}
+.pilecount{font-size:11px;opacity:.85}
+.card.pile{box-shadow:3px 3px 0 var(--back),6px 6px 0 var(--card-line),9px 9px 0 var(--back);margin-right:10px;margin-bottom:8px}
+.card .stack{margin-top:4px;display:flex;flex-direction:column;gap:3px;padding-left:6px;border-left:2px solid var(--card-line)}
+.card .stack .card{width:auto;min-height:0;font-size:11px}
+.chip{display:inline-flex;gap:4px;align-items:center;border:1px solid var(--card-line);border-radius:999px;padding:1px 8px;background:var(--card);cursor:grab;font-size:12px}
+.count{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.empty{color:var(--muted);font-size:11.5px}
+dl{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;margin:0;font-size:13px}
+dt{color:var(--muted)}
+dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.btns{display:flex;flex-wrap:wrap;gap:4px;margin:4px 0}
+button{border:1px solid var(--area-line);background:var(--card);border-radius:4px;padding:2px 8px;cursor:pointer}
+button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+button:hover{border-color:var(--accent)}
+.sec{margin-top:10px;padding-top:8px;border-top:1px solid var(--area-line);display:flex;flex-direction:column;gap:4px}
+.sec h3{font-size:12px;margin:0;color:var(--muted)}
+.rule{font-size:12.5px;padding:4px 6px;border-radius:4px}
+.rule.hl{background:var(--accent-soft)}
+.rule b{font-family:var(--mono);color:var(--accent)}
+.tabs{display:flex;gap:4px;margin-bottom:8px}
+#log li{font-size:12px;font-family:var(--mono);overflow-wrap:anywhere}
+#log ol{margin:0;padding-left:2.2em;display:flex;flex-direction:column;gap:2px}
+input.small{width:100%;border:1px solid var(--area-line);border-radius:4px;padding:2px 6px;background:var(--card)}
+#toast{position:fixed;right:16px;bottom:16px;max-width:420px;padding:8px 12px;border-radius:6px;background:var(--warn-soft);color:var(--warn);border:1px solid var(--warn)}
+.help{font-size:12px;color:var(--muted)}
+/* 画像（定義の image・back_image。表示方法の 1 つ） */
+.card.img{background-size:cover;background-position:center;width:74px;min-height:104px;padding:0;justify-content:flex-end;color:#fff;text-shadow:0 1px 2px #000;overflow:hidden}
+.card.img>div:first-child{background:rgba(0,0,0,.55);font-size:10.5px;padding:1px 3px;margin-top:auto}
+.card.img.side{width:104px;min-height:74px}
+.chip.img{background-size:cover;background-position:center;width:30px;height:30px;border-radius:50%;padding:0;color:#fff;text-shadow:0 1px 2px #000;display:inline-flex;align-items:flex-end;justify-content:flex-end;font-size:0}
+.chip.img .count{font-size:11px;font-weight:700;background:rgba(0,0,0,.6);border-radius:6px;padding:0 3px}
+.area.bgimg{background-size:cover;background-repeat:no-repeat;background-position:center;min-height:180px}
+.area.bgimg>.head b{background:var(--card);padding:0 4px;border-radius:3px}
+.credit{font-size:11px;color:var(--muted);padding:4px 16px 12px}
+.area.bgimg .area{background:transparent;border-color:rgba(255,255,255,.35)}
+.area.bgimg .area>.head b{background:var(--card);padding:0 4px;border-radius:3px;font-size:11px}
+.area.bgimg .area .empty{display:none}
+.card.round{width:46px;min-height:46px;height:46px;border-radius:50%;padding:0}
+.area.bgimg.onimg{background:var(--area);min-height:0}
+.rectwrap{position:relative;width:100%;max-width:380px;aspect-ratio:591/2150;background-size:100% 100%;margin:0 auto}
+.area.rectcell{position:absolute;padding:0;border:1px dashed transparent;background:transparent!important;display:flex;align-items:center;justify-content:center}
+.area.rectcell:hover,.area.rectcell.drop{border-color:#fff}
+.rectwrap.plain{max-width:1100px;background:var(--table)}
+.rectwrap.plain .area.rectcell{border:1px solid var(--area-line);background:var(--area)!important;flex-direction:column;overflow:visible}
+.rectwrap.plain .area.rectcell>.head{position:static;opacity:1;font-size:10px;line-height:1.1;padding:0 2px;white-space:nowrap}
+.rectwrap.plain .area.rectcell .card{min-height:0;width:auto;height:auto;font-size:10px;padding:0 3px}
+.rectwrap.plain .rectcell .empty,.rectwrap.plain .rectcell .fold{display:none}
+.rectwrap.plain .rectcell .items{flex-wrap:wrap;gap:1px;height:auto}
+.rectwrap.plain .rectcell .card.round{height:18px;width:18px;min-height:0;font-size:9px;padding:0;overflow:hidden}
+.rectwrap.plain .rectcell .card .cid,.rectwrap.plain .rectcell .card .orient{display:none}
+.rectwrap.plain .rectcell .kids{display:flex;gap:1px}
+.area.polycell{border:none!important;display:block;overflow:hidden}
+.area.polycell.drop,.area.polycell:hover{filter:brightness(1.12)}
+.polycell>.polyin{position:absolute;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;max-width:100%}
+.rectwrap svg.polyline{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.rectwrap svg.polyline polygon{fill:none;stroke:#6b6250;stroke-width:1.2;vector-effect:non-scaling-stroke}
+.rectwrap.plain .polycell .head{color:#333;font-size:10px;line-height:1.1;white-space:nowrap;padding:0}
+.polyin .area .head{font-size:9px!important}
+.rectwrap.plain .rectcell .area{padding:0 1px;margin:0;min-height:0;border:1px dotted var(--area-line);background:transparent;font-size:9px}
+.area.rectcell>.head{position:absolute;inset:0;opacity:0}
+.area.rectcell .items{min-height:0;padding:0;justify-content:center;align-items:center;width:100%;height:100%;flex-wrap:nowrap}
+.card .written{font-size:12px;white-space:pre-wrap;overflow-wrap:anywhere;max-width:16em}
+.area.rectcell .card.round{width:auto;height:88%;min-height:0;aspect-ratio:1;flex:none}
+.card.round.img>div:first-child{display:none}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title">bg テーブル</h1>
+  <label>見る立場 <select id="as"></select></label>
+  <label>操作する人 <select id="by"></select></label>
+  <label>理由のルール <select id="rule"><option value="">（なし）</option></select></label>
+  <label><input type="checkbox" id="showlinks" checked> エリアのつながり</label>
+  <details id="showmenu"><summary>表示</summary><div id="showopts"></div></details>
+  <label>卓の大きさ <select id="zoom"><option value="0.6">60%</option><option value="0.8">80%</option><option value="1" selected>100%</option><option value="1.25">125%</option><option value="1.5">150%</option></select></label>
+  <button type="button" id="tog-inspect" aria-pressed="true" title="「調べる」の欄を出す・たたむ（卓を広くする）">調べる欄</button>
+  <button type="button" id="tog-side" aria-pressed="true" title="ルール・記録の欄を出す・たたむ（卓を広くする）">ルール欄</button>
+</header>
+<main>
+  <section class="panel">
+    <h2>卓</h2>
+    <p class="help helpline">ドラッグで動かす。エリアに落とすとその上に、カードに落とすとその上に重ねる（順番を持つエリアではその位置に入れる。重ねるのは Alt）。Shift を押して落とすと、そのカードの下に差し込む。クリックで右の欄に詳しく出る。選んだカードは T（またはダブルクリック）でタップ、F で表裏を返す。</p>
+    <div id="actions"></div>
+    <div id="table"></div>
+  </section>
+  <section class="panel" id="inspect"><h2>調べる</h2><p class="empty">カードかエリアをクリックする</p></section>
+  <section class="panel" id="sidepanel">
+    <div class="tabs"><button id="t-rules" class="on">ルール</button><button id="t-log">記録</button><button id="t-metrics">指標</button><button id="t-talk">発言</button><button id="t-prog">進行・裁定</button></div>
+    <div id="side"></div>
+  </section>
+</main>
+<div id="toast" hidden></div>
+<script>
+const $ = (s, el = document) => el.querySelector(s);
+const h = (tag, attrs = {}, ...kids) => {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
+    else if (v !== undefined && v !== null && v !== false) e.setAttribute(k, v === true ? "" : v);
+  }
+  for (const k of kids.flat()) if (k !== null && k !== undefined) e.append(k instanceof Node ? k : String(k));
+  return e;
+};
+let DEF, VIEW, LOG = [], SEL = null, TAB = "rules";
+
+async function api(path, body) {
+  const r = await fetch(path, body ? {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)} : {});
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.error || r.statusText);
+  return j;
+}
+function toast(msg) { const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => t.hidden = true, 5000); }
+
+let DRAFT = null; // 提案を組み立て中なら、卓での移動・状態の変更を行わずに提案の中身に足す（RUL-012）
+async function op(o) {
+  const by = $("#by").value, rule = $("#rule").value;
+  if (DRAFT && ["move", "attach", "set", "flip", "rotate"].includes(o.op)) {
+    DRAFT.push(o); toast(`提案に足した（${DRAFT.length} 件）。発言の欄から出す`); if (TAB === "talk") side(); return;
+  }
+  try {
+    const r = await api("/api/op", {...o, ...(by ? {by} : {}), ...(rule && !o.rule ? {rule} : {})});
+    await refresh(true);
+    if (r.warnings && r.warnings.length) toast("警告：" + r.warnings.join(" / "));
+  }
+  catch (e) { toast("受け付けられなかった：" + e.message); }
+}
+
+async function refresh(force) {
+  const log = await api("/api/log");
+  if (!force && log.length === LOG.length && VIEW) return;
+  LOG = log;
+  const as = $("#as").value;
+  VIEW = await api(`/api/view?meaning=1${as ? "&as=" + encodeURIComponent(as) : ""}`);
+  render();
+}
+
+function stateBadges(st) {
+  if (!st) return [];
+  return Object.entries(st).map(([f, v]) => {
+    const val = typeof v === "object" ? v.value : v;
+    return h("span", {class: "badge st", title: (v && v.meaning) || ""}, `${f}:${val}`);
+  });
+}
+function valueOf(st, f) { const v = st && st[f]; return v && typeof v === "object" ? v.value : v; }
+
+function itemEl(it, container) {
+  if (it.hidden) {
+    const el = h("div", {class: "card hidden" + (it.back_image ? " img" : ""), title: it.hidden}, it.back_image ? "" : "？", it.back ? h("div", {class: "cid"}, it.back) : null,
+      it.owner ? h("div", {class: "cid"}, "持ち主 " + it.owner) : null,
+      it.known ? h("div", {class: "badges"}, Object.entries(it.known).map(([k, v]) => h("span", {class: "badge at", title: "一部だけ知っている"}, `${k}:${v}`))) : null, // 一部だけ知っている（ヒント）
+      stackEl(it, container));
+    if (it.back_image) el.style.backgroundImage = `url("/assets/${encodeURI(it.back_image)}")`;
+    return el;
+  }
+  if ("count" in it) {
+    const chip = h("span", {class: "chip" + (it.image ? " img" : ""), title: `${it.kind} ×${it.count}` + (it.meaning ? "：" + it.meaning : ""),
+      onpointerdown: e => grab(e, {obj: it.id, from: container, counted: true}, () => select({type: "item", id: it.id, container, item: it}))},
+      (DEF.kinds[it.kind] || {}).name || (it.kind && it.kind !== it.id ? `${it.kind}` : it.id), h("span", {class: "count"}, "×" + (it.count === "unlimited" ? "∞" : it.count)));
+    if (it.image) chip.style.backgroundImage = `url("/assets/${encodeURI(it.image)}")`;
+    return chip;
+  }
+  const disp = it.display || {rotate: 0, face: "up"};          // 状態の表示方法（SPC-038）
+  const down = disp.face === "down", side = disp.rotate % 180 === 90;
+  const cls = ["card", down && "down", side && "side", it.image && "img", it.shape === "round" && "round", SEL && SEL.id === it.id && "sel"].filter(Boolean).join(" ");
+  const card = h("div", {class: cls, "data-obj": it.id, "data-in": container, title: it.meaning || "",
+      onpointerdown: e => grab(e, {obj: it.id, from: container}, () => select({type: "item", id: it.id, container, item: it}))},
+    h("div", {}, it.title || it.kind || ""), h("div", {class: "cid"}, it.id),
+    Object.entries((DEF.kinds[it.kind] || {}).states || {}).filter(([f, t]) => (typeof t === "string" || ((DEF.kinds[it.kind] || {}).show_state || []).includes(f)) && valueOf(it.state, f))
+      .map(([f]) => { const v = it.state[f]; return h("div", {class: "written"}, String((v && typeof v === "object" && v.meaning) || valueOf(it.state, f))); }), // 書き込んだ値（命令の文）と、種類の show_state の項目はいつも出す
+    h("div", {class: "badges"}, it.visible_to ? h("span", {class: "badge vis"}, "公開：" + it.visible_to) : null,
+      Object.entries(it.attributes || {}).filter(([, v]) => typeof v !== "object").map(([k, v]) => h("span", {class: "badge at", title: k}, `${k}:${v}`)), stateBadges(it.state), it.attached ? h("span", {class: "badge st"}, `付き先:${it.attached.to}`) : null),
+    stackEl(it, it.id), h("span", {class: "orient", title: `回転 ${disp.rotate}°・${{up: "表", down: "裏", held: "手札"}[disp.face] || disp.face}`},
+      `${side ? "横" : "縦"} ${ARROW[disp.rotate] || "↑"}`));
+  if (it.image) card.style.backgroundImage = `url("/assets/${encodeURI(it.image)}")`;
+  const pc = it.owner && (DEF.players.find(p => p.id === it.owner) || {}).color; // 持ち主の色（定義の players[].color）
+  if (pc && !it.image) { card.style.borderColor = pc; card.style.boxShadow = `inset 0 0 0 2px ${pc}`; if (it.shape === "round") { card.style.background = pc; card.style.color = "#fff"; } }
+  return card;
+}
+const ARROW = {0: "↑", 90: "→", 180: "↓", 270: "←"}; // カードの上が向く方向
+function stackEl(it, container) {
+  if (!it.stacked) return null;
+  return h("div", {class: "stack"}, it.stacked.map(x => itemEl(x, container)));
+}
+
+// マウスもタッチも同じポインタ操作で扱う。少し動かしたらドラッグ、動かさずに離したらクリック
+function grab(e, data, onClick) {
+  if (e.button > 0) return;
+  e.stopPropagation(); e.preventDefault();
+  const x0 = e.clientX, y0 = e.clientY, src = e.currentTarget;
+  let ghost = null, over = null;
+  const target = ev => {
+    const el = document.elementFromPoint(ev.clientX, ev.clientY);
+    const card = el && el.closest("[data-obj]");
+    if (card && card.dataset.obj !== data.obj && !src.contains(card)) return {el: card, id: card.dataset.obj, isObject: true, in: card.dataset.in};
+    const area = el && el.closest("[data-area]");
+    return area ? {el: area, id: area.dataset.area, isObject: false} : null;
+  };
+  const move = ev => {
+    if (!ghost && Math.hypot(ev.clientX - x0, ev.clientY - y0) < 5) return;
+    if (!ghost) { ghost = src.cloneNode(true); ghost.className += " ghost"; document.body.append(ghost); }
+    ghost.style.left = ev.clientX + 8 + "px"; ghost.style.top = ev.clientY + 8 + "px";
+    const t = target(ev);
+    if (over && (!t || t.el !== over)) over.classList.remove("drop");
+    over = t && t.el; if (over) over.classList.add("drop");
+  };
+  const up = ev => {
+    removeEventListener("pointermove", move); removeEventListener("pointerup", up);
+    if (over) over.classList.remove("drop");
+    if (!ghost) { // 描き直しで要素が入れ替わるので、ダブルクリックは自分で数える
+      const now = Date.now(), dbl = grab.last && grab.last.obj === data.obj && now - grab.last.t < 400;
+      grab.last = {obj: data.obj, t: now};
+      return dbl && !data.counted ? tap(data.obj) : onClick();
+    }
+    ghost.remove();
+    const t = target(ev);
+    if (!t) return;
+    if (t.isObject && ev.shiftKey) return op({op: "attach", obj: data.obj, to: t.id, side: "under"});
+    const area = t.isObject && areaById(t.in);
+    if (area && area.ordered && !ev.altKey && !data.counted) { // 順番を持つエリア：そのカードの位置に入れる（重ねるのは Alt。SPC-048）
+      const items = (VIEW.areas[t.in].shown || []).map(x => x.id).filter(x => x !== data.obj);
+      return op({op: "move", obj: data.obj, to: t.in, at: items.indexOf(t.id)});
+    }
+    op({op: "move", obj: data.obj, to: t.id, ...(data.counted ? {from: data.from, n: 1} : {})});
+  };
+  addEventListener("pointermove", move); addEventListener("pointerup", up);
+}
+
+function areaEl(a) {
+  const v = VIEW.areas[a.id];
+  const kids = a.areas || [];
+  const gridKids = kids.length && kids.every(k => Array.isArray(k.pos));
+  const box = h("div", {class: "area" + (SEL && SEL.id === a.id ? " sel" : "") + (a.image ? " bgimg" : ""), "data-area": a.id});
+  if (a.image) box.style.backgroundImage = `url("/assets/${encodeURI(a.image)}")`;  // 背景画像（定義の image）
+  const hidden = v && v.hidden ? Object.entries(v.hidden).map(([k, w]) => `${k}:${w}`).join(" ") : "";
+  const folded = FOLD.has(a.id);
+  box.append(h("div", {class: "head", onclick: () => select({type: "area", id: a.id, area: a})},
+    h("span", {class: "fold", title: folded ? "ひらく" : "たたむ（表示だけ）", onpointerdown: e => e.stopPropagation(), onclick: e => { e.stopPropagation(); toggleFold(a.id); }}, folded ? "▸" : "▾"),
+    h("b", {}, a.name || a.id), h("span", {class: "id meta"}, a.id), a.owner ? h("span", {class: "id meta"}, "持ち主 " + a.owner) : null,
+    hidden ? h("span", {class: "hid"}, "見えない：" + hidden) : null));
+  if (folded) { // たたんだエリア：見出しと部品の数だけ（局面・記録は変えない。SPC-042）
+    const n = v && (Array.isArray(v.shown) ? v.shown.length : (v.shown && v.shown.count) || 0);
+    box.append(h("span", {class: "count"}, `（たたんでいる：${n ?? "?"}）`));
+    return box;
+  }
+  const items = h("div", {class: "items"});
+  if (!v) items.append(h("span", {class: "empty"}, "（この立場からは存在も見えない）"));
+  else if (Array.isArray(v.shown)) { v.shown.forEach(it => items.append(itemEl(it, a.id))); if (!v.shown.length) items.append(h("span", {class: "empty"}, "空")); }
+  else if (v.shown && "count" in v.shown) backs(items, v.shown.count, a.ordered, Object.values(v.hidden || {})[0]);
+  else if (v.shown && "exists" in v.shown) items.append(h("span", {class: "count"}, v.shown.exists ? "何かある" : "空"));
+  box.append(items);
+  if (kids.length && a.hex) { // 六角の盤：アキシャル座標 [q, r] から互い違いの位置へ。頂点・辺は xy（マスの大きさ 1 の平面）
+    const S = 50, W = Math.sqrt(3) * S, cells = kids.filter(k => k.pos), marks = kids.filter(k => k.xy && !k.pos);
+    const pts = cells.map(k => [W * (k.pos[0] + k.pos[1] / 2), 1.5 * S * k.pos[1]]);
+    const minX = Math.min(...pts.map(p => p[0])), minY = Math.min(...pts.map(p => p[1]));
+    const wrap = h("div", {class: "hexwrap"});
+    wrap.style.width = Math.max(...pts.map(p => p[0])) - minX + W + "px"; wrap.style.height = Math.max(...pts.map(p => p[1])) - minY + 2 * S + "px";
+    cells.forEach((k, i) => { const el = areaEl(k); el.classList.add("hexcell"); el.style.left = pts[i][0] - minX + "px"; el.style.top = pts[i][1] - minY + "px"; el.style.width = W + "px"; el.style.height = 2 * S + "px"; wrap.append(el); });
+    marks.forEach(k => { // 頂点は丸、辺は細い棒
+      const el = areaEl(k), cx = S * k.xy[0] - minX + W / 2, cy = S * k.xy[1] - minY + S, isEdge = k.angle !== null && k.angle !== undefined;
+      el.classList.add(isEdge ? "hexedge" : "hexvertex");
+      el.style.left = cx + "px"; el.style.top = cy + "px";
+      if (isEdge) el.style.transform = `translate(-50%, -50%) rotate(${k.angle}deg)`;
+      wrap.append(el);
+    });
+    const hs = h("div", {class: "hexscroll"}, wrap);
+    box.append(hs);
+    requestAnimationFrame(() => { // 列より広い盤は、列の幅に縮めて描く（はみ出して切れないように）
+      const sc = hs.clientWidth / wrap.offsetWidth;
+      if (sc > 0 && sc < 1) { wrap.style.transformOrigin = "0 0"; wrap.style.transform = `scale(${sc})`; hs.style.height = wrap.offsetHeight * sc + 12 + "px"; hs.style.overflow = "hidden"; requestAnimationFrame(drawLinks); }
+    });
+  } else if (kids.length && kids.every(k => Array.isArray(k.rect) || Array.isArray(k.poly))) {
+    // 位置（rect：親の中の [x, y, 幅, 高さ] の割合）。絵があれば絵の縦横比で絵に重ね、なければ aspect の枠に地図のように並べる
+    const wrap = h("div", {class: "rectwrap" + (a.image ? "" : " plain")});
+    if (a.image) {
+      box.classList.add("onimg");
+      wrap.style.backgroundImage = box.style.backgroundImage; box.style.backgroundImage = "";
+      const img = new Image(); img.onload = () => { wrap.style.aspectRatio = `${img.naturalWidth} / ${img.naturalHeight}`; }; img.src = `/assets/${encodeURI(a.image)}`;
+    } else wrap.style.aspectRatio = a.aspect || "1 / 1";
+    const NS = "http://www.w3.org/2000/svg", outline = document.createElementNS(NS, "svg");
+    outline.setAttribute("class", "polyline"); outline.setAttribute("viewBox", "0 0 1000 1000"); outline.setAttribute("preserveAspectRatio", "none");
+    for (const k of kids) {
+      const el = areaEl(k);
+      el.classList.add("rectcell"); el.title = k.name || k.id;
+      if (k.poly) { // 多角形（poly：親の中の頂点の割合）。外接する四角に置いて切り抜き、中身は重心に
+        const xs = k.poly.map(p => p[0]), ys = k.poly.map(p => p[1]);
+        const x = Math.min(...xs), y = Math.min(...ys), w = Math.max(...xs) - x || 1e-6, hh = Math.max(...ys) - y || 1e-6;
+        Object.assign(el.style, {left: x * 100 + "%", top: y * 100 + "%", width: w * 100 + "%", height: hh * 100 + "%",
+          clipPath: `polygon(${k.poly.map(([px, py]) => `${(px - x) / w * 100}% ${(py - y) / hh * 100}%`).join(",")})`});
+        el.classList.add("polycell");
+        const inner = h("div", {class: "polyin"}); inner.append(...el.childNodes); el.append(inner);
+        inner.style.left = (xs.reduce((s, v) => s + v, 0) / xs.length - x) / w * 100 + "%";
+        inner.style.top = (ys.reduce((s, v) => s + v, 0) / ys.length - y) / hh * 100 + "%";
+        const pg = document.createElementNS(NS, "polygon");
+        pg.setAttribute("points", k.poly.map(([px, py]) => `${px * 1000},${py * 1000}`).join(" ")); outline.append(pg);
+      } else {
+        const [x, y, w, hh] = k.rect;
+        Object.assign(el.style, {left: x * 100 + "%", top: y * 100 + "%", width: w * 100 + "%", height: hh * 100 + "%"});
+      }
+      if (k.color) el.style.setProperty("background", k.color, "important"); // エリアの塗り（定義の color）
+      wrap.append(el);
+    }
+    if (outline.childNodes.length) wrap.append(outline);
+    box.append(wrap);
+  } else if (kids.length) {
+    const wrap = h("div", {class: "kids" + (gridKids ? " grid" : "")});
+    if (gridKids) wrap.style.gridTemplateColumns = `repeat(${Math.max(...kids.map(k => k.pos[0])) + 1}, minmax(${kids.length > 30 ? 44 : 90}px, 1fr))`;
+    for (const k of kids) {
+      const el = areaEl(k);
+      if (gridKids) { el.style.gridColumn = k.pos[0] + 1; el.style.gridRow = k.pos[1] + 1; }
+      wrap.append(el);
+    }
+    box.append(wrap);
+  }
+  return box;
+}
+
+// 枚数だけ分かるエリア：裏面を並べる。順番を持つ置き場（山札）は山の形にして枚数を添える
+function backs(items, n, pile, why) {
+  if (!n) return items.append(h("span", {class: "empty"}, "空"));
+  const title = `${n} 枚（${why || "中身は見えない"}）`;
+  if (pile) return items.append(h("div", {class: "card hidden pile", title}, "山", h("div", {class: "pilecount"}, `${n} 枚`)));
+  for (let i = 0; i < Math.min(n, 20); i++) items.append(h("div", {class: "card hidden", title}, "？"));
+  if (n > 20) items.append(h("span", {class: "count"}, `ほか ${n - 20} 枚`));
+}
+
+// アクション（SPC-040）：行う人＝操作する人。キーパーなら見る立場のプレイヤー
+let PENDING = null;
+function actor() { const by = $("#by").value; return by && by !== "keeper" ? by : ($("#as").value || DEF.players[0].id); }
+function kindChain(k) { const out = []; while (k && DEF.kinds[k] && !out.includes(k)) { out.push(k); k = DEF.kinds[k].base; } return out; }
+function candidates(p, who) {
+  if (p.free) return [];
+  if (p.players) return DEF.players.map(x => ({id: x.id, label: `${x.id} ${x.name || ""}`}));
+  if (p.choices) return p.choices.map(x => ({id: x, label: x}));
+  const area = (p.from || p.in || "").replaceAll("{actor}", who).replaceAll("{player}", who);
+  if (p.in) return (areaById(area)?.areas || []).filter(a => !p.kind || kindChain(a.kind).includes(p.kind)).map(a => ({id: a.id, label: a.name || a.id}));
+  const out = [], walk = a => {
+    const v = VIEW.areas[a.id];
+    const items = x => { for (const it of x || []) { if (it.id && (!p.kind || kindChain(DEF.parts[it.id]?.kind).includes(p.kind))) out.push({id: it.id, label: "count" in it ? `${it.kind || it.id} ×${it.count}（${it.id}）` : `${it.title || it.id}（${it.id}）`}); items(it.stacked); } };
+    if (v && Array.isArray(v.shown)) items(v.shown);
+    (a.areas || []).forEach(walk);
+  };
+  if (!area) DEF.areas.forEach(walk); else { const root = areaById(area); if (root) walk(root); } // from がなければ卓全体から
+  return out;
+}
+function actionsEl() {
+  const box = $("#actions"); box.replaceChildren();
+  if (!DEF.actions.length) { box.hidden = true; return; }
+  box.hidden = false;
+  const who = actor();
+  const F = VIEW.flow;
+  if (F) { // 進行（SPC-051）：段階・手番・フェーズと、進めるボタン
+    box.append(h("div", {class: "flowline"},
+      h("b", {}, F.stage_name || F.stage || "終了"), F.turn_no ? ` 手番 ${F.turn_no}` : "", F.active ? `・${F.active}` : "",
+      F.phases.length ? h("span", {class: "phases"}, F.phases.map(p => h("span", {class: "ph" + (p.id === F.phase ? " now" : "")}, p.name))) : null,
+      h("button", {onclick: () => op({op: "advance"})}, "次のフェーズへ"),
+      F.active ? h("button", {onclick: () => op({op: "advance", to: "turn"})}, "手番を終える") : null));
+  }
+  if ((VIEW.stack || []).length) { // スタック（割り込み）：一番上が先に解決する。見送る・解決する
+    box.append(h("div", {class: "flowline", id: "stack"}, h("b", {}, "スタック"),
+      [...VIEW.stack].reverse().map((e, i) => h("span", {class: "ph" + (i === 0 ? " now" : "")}, `#${e.n} ${e.name}（${e.by}）`)),
+      h("span", {class: "help"}, ` 見送り待ち：${(VIEW.stack_waiting || []).join("・") || "なし"}`),
+      who !== "keeper" ? h("button", {onclick: () => op({op: "pass"})}, "見送る") : h("button", {onclick: () => op({op: "resolve"})}, "解決する")));
+  }
+  box.append(h("span", {class: "who"}, `アクション（${who}）`));
+  const av = F ? (F.available || {}) : null;
+  const groups = av ? [["今のフェーズ", [...(av.main || []), ...(av.stage || [])]], ["フリー", av.free || []], ["手番外", av.reaction || []]] : [["", DEF.actions.map(a => a.id)]];
+  const shown = new Set(groups.flatMap(g => g[1]));
+  const btn = (a, dim) => h("button", {class: dim ? "dim" : "", title: `${a.rule || ""} ${a.when || ""}`, onclick: () => {
+      if (!(a.params || []).length) return runAction(a, who, {});
+      PENDING = {a, fixed: {}}; actionsEl();
+    }}, a.name || a.id, a.rule ? h("span", {class: "rid"}, a.rule) : null);
+  for (const [label, ids] of groups) {
+    if (!ids.length) continue;
+    if (label) box.append(h("span", {class: "glabel"}, label));
+    ids.map(id => DEF.actions.find(a => a.id === id)).filter(Boolean).forEach(a => box.append(btn(a, false)));
+  }
+  const rest = DEF.actions.filter(a => !shown.has(a.id));
+  if (av && rest.length) box.append(h("details", {class: "others"}, h("summary", {}, `その他 ${rest.length}`), rest.map(a => btn(a, true))));
+  if (PENDING) {
+    const {a, fixed} = PENDING;
+    const sels = (a.params || []).filter(p => !(p.name in fixed)).map(p => {
+      if (p.free) return [p.name, h("input", {class: "small", placeholder: p.text || "自由に書く"})]; // 自由に書く値（命令の文など）
+      const sel = h("select", {}, candidates(p, who).map(c => h("option", {value: c.id}, c.label)));
+      if (p.require || p.owner) // 条件つきの候補はサーバーで確かめる（SPC-052）：満たすものを先に、満たさないものは理由つき
+        api(`/api/candidates?action=${encodeURIComponent(a.id)}&by=${encodeURIComponent(who)}&param=${encodeURIComponent(p.name)}`).then(list => {
+          list.sort((x, y) => (x.problems.length > 0) - (y.problems.length > 0));
+          sel.replaceChildren(...list.map(c => h("option", {value: c.id}, c.problems.length ? `${c.id}（✕ ${c.problems[0].split("：").pop()}）` : `${c.id} ✓`)));
+        }).catch(() => {});
+      return [p.name, sel];
+    });
+    box.append(h("form", {onsubmit: e => { e.preventDefault(); runAction(a, who, {...fixed, ...Object.fromEntries(sels.map(([n, s]) => [n, s.value]))}); }},
+      Object.entries(fixed).map(([n, v]) => h("span", {class: "help"}, `${n}=${v}`)),
+      h("b", {}, a.name), a.when ? h("span", {class: "help"}, a.when) : null,
+      sels.map(([n, s]) => h("label", {}, n + " ", s)), h("button", {type: "submit"}, "行う"), h("button", {type: "button", onclick: () => { PENDING = null; actionsEl(); }}, "やめる")));
+  }
+}
+// 部品・エリアに結びつくアクション（SPC-041）：その部品を引数の候補に含む／手順・引数がそのエリアを使う
+function boundActions(sel) {
+  const who = actor(), sub = s => typeof s === "string" ? s.replaceAll("{actor}", who).replaceAll("{player}", who) : s;
+  const out = [];
+  for (const a of DEF.actions) {
+    if (sel.type === "item") {
+      const p = (a.params || []).find(p => !p.players && !p.in && candidates(p, who).some(c => c.id === sel.id));
+      if (p) out.push({a, fixed: {[p.name]: sel.id}});
+    } else {
+      const p = (a.params || []).find(p => sub(p.from) === sel.id || sub(p.in) === sel.id);
+      const used = (a.steps || []).some(st => ["to", "from", "area"].some(k => sub(st[k]) === sel.id) || (typeof st.obj === "string" && sub(st.obj.replace(/^(top|bottom):/, "")) === sel.id && /^(top|bottom):/.test(st.obj)));
+      const inParam = (a.params || []).find(p => p.in && (areaById(sub(p.in))?.areas || []).some(c => c.id === sel.id));
+      if (inParam) out.push({a, fixed: {[inParam.name]: sel.id}});
+      else if (p || used) out.push({a, fixed: {}});
+    }
+  }
+  return out;
+}
+function boundEl(sel) {
+  const list = boundActions(sel);
+  if (!list.length) return null;
+  return h("div", {class: "sec"}, h("h3", {}, `この${sel.type === "item" ? "部品" : "エリア"}でできるアクション（${actor()}）`),
+    h("div", {class: "btns"}, list.map(({a, fixed}) => h("button", {title: `${a.rule || ""} ${a.when || ""}`, onclick: () => {
+      const rest = (a.params || []).filter(p => !(p.name in fixed));
+      if (!rest.length) return runAction(a, actor(), fixed);
+      PENDING = {a, fixed}; actionsEl(); $("#actions").scrollIntoView({block: "nearest"});
+    }}, a.name || a.id))));
+}
+
+async function runAction(a, by, args) {
+  PENDING = null;
+  try {
+    const r = await api("/api/action", {action: a.id, by, args});
+    await refresh(true);
+    if (r.warnings && r.warnings.length) toast("警告：" + r.warnings.join(" / "));
+  } catch (e) { toast("受け付けられなかった：" + e.message); actionsEl(); }
+}
+
+function select(s) { SEL = s; render(); }
+
+// 回す・返すは、種類が定義する状態の表示方法（show）からライブラリが値を選ぶ（タップは 90 度回すこと）
+function tap(id) { op({op: "rotate", obj: id}); }
+function flip(id) { op({op: "flip", obj: id}); }
+function findItem(id) {
+  const find = items => { for (const it of items || []) { if (it.id === id) return it; const f = find(it.stacked); if (f) return f; } };
+  for (const v of Object.values(VIEW.areas)) if (Array.isArray(v.shown)) { const f = find(v.shown); if (f) return f; }
+}
+addEventListener("keydown", e => {
+  if (!SEL || SEL.type !== "item" || /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) return;
+  if (e.key === "t" || e.key === "T") tap(SEL.id);
+  if (e.key === "f" || e.key === "F") flip(SEL.id);
+});
+
+function inspect() {
+  const p = $("#inspect"); p.replaceChildren(h("h2", {}, "調べる"));
+  if (!SEL) return p.append(h("p", {class: "empty"}, "カードかエリアをクリックする"));
+  if (SEL.type === "area") {
+    const a = SEL.area, v = VIEW.areas[a.id] || {};
+    p.append(h("dl", {}, h("dt", {}, "エリア"), h("dd", {}, `${a.name || ""} (${a.id})`),
+      h("dt", {}, "意味"), h("dd", {}, v.meaning || a.text || "—"),
+      h("dt", {}, "公開範囲"), h("dd", {}, Object.entries(a.visibility).map(([k, w]) => `${k}:${w}`).join(" ")),
+      a.pos ? [h("dt", {}, "位置"), h("dd", {}, JSON.stringify(a.pos))] : null,
+      a.owner ? [h("dt", {}, "持ち主"), h("dd", {}, a.owner)] : null));
+    p.append(h("div", {class: "btns"}, h("button", {onclick: () => op({op: "shuffle", area: a.id})}, "切る（シャッフル）")));
+    p.append(boundEl(SEL) || "");
+    const links = DEF.links.filter(l => (l.between || []).includes(a.id));
+    if (links.length) p.append(h("div", {class: "sec"}, h("h3", {}, "リンク"), links.map(l => h("div", {class: "rule"}, `${l.between.join(" ⇄ ")}（${l.type || ""}）${l.text || ""}`))));
+    return;
+  }
+  const it = SEL.item, part = DEF.parts[SEL.id] || {}, kind = DEF.kinds[part.kind] || {};
+  const bound = boundEl(SEL);
+  p.append(h("dl", {}, h("dt", {}, "部品"), h("dd", {}, `${it.title || ""} (${SEL.id})`),
+    h("dt", {}, "種類"), h("dd", {}, part.kind || "—"), h("dt", {}, "置き場"), h("dd", {}, SEL.container),
+    h("dt", {}, "意味"), h("dd", {}, it.meaning || kind.text || "—"),
+    it.owner ? [h("dt", {}, "持ち主"), h("dd", {}, it.owner)] : null,
+    it.visible_to ? [h("dt", {}, "公開"), h("dd", {}, it.visible_to)] : null,
+    it.state ? [h("dt", {}, "状態"), h("dd", {}, Object.entries(it.state).map(([f, v]) => `${f}: ${valueOf(it.state, f)}`).join("、"))] : null,
+    part.attributes ? [h("dt", {}, "属性"), h("dd", {}, Object.entries(part.attributes).map(([k, v]) => `${k}: ${v}`).join("、"))] : null));
+  if (bound) p.append(bound);
+  if (part.distinct) {
+    p.append(h("div", {class: "btns"},
+      h("button", {onclick: () => tap(SEL.id), title: "T キー・ダブルクリック"}, "時計回りに回す（タップ）"),
+      h("button", {onclick: () => flip(SEL.id), title: "F キー"}, "表裏を返す")));
+    if (it.display) p.append(h("p", {class: "help"}, `表示：回転 ${it.display.rotate}° ${ARROW[it.display.rotate] || ""}・${{up: "表", down: "裏", held: "手札（持ち主だけが見る）"}[it.display.face] || it.display.face}`));
+    const sec = h("div", {class: "sec"}, h("h3", {}, "状態（押すと変わる）"));
+    for (const [f, vals] of Object.entries(kind.states || {})) {
+      const cur = valueOf(it.state, f);
+      sec.append(h("div", {}, h("span", {class: "count"}, f + " "),
+        h("span", {class: "btns"}, Object.entries(vals || {}).map(([val, m]) =>
+          h("button", {class: cur === val ? "on" : "", title: typeof m === "object" ? m.text : m,
+            onclick: () => op({op: "set", obj: SEL.id, field: f, value: val})}, val)))));
+      const m = it.state && it.state[f] && it.state[f].meaning;
+      if (m) sec.append(h("div", {class: "help"}, typeof m === "object" ? m.text : m));
+      const show = vals && vals[cur] && typeof vals[cur] === "object" && vals[cur].show;
+      if (show) sec.append(h("div", {class: "help"}, "表示方法：" + Object.entries(show).map(([k, v]) => `${k}=${v}`).join("、")));
+    }
+    p.append(sec);
+    const know = h("select", {}, DEF.players.map(pl => h("option", {value: pl.id}, pl.id)));
+    p.append(h("div", {class: "sec"}, h("h3", {}, "既知（裏向きでも中身を知っている）"),
+      h("div", {class: "btns"}, know, h("button", {onclick: () => op({op: "know", obj: SEL.id, player: know.value})}, "知っていることにする"))));
+  } else {
+    p.append(h("div", {class: "btns"}, h("button", {onclick: () => {
+      const to = prompt("移す先のエリア ID"); if (to) op({op: "move", obj: SEL.id, from: SEL.container, to, n: 1}); }}, "1 個を移す…")));
+  }
+  if (it.uses) p.append(h("div", {class: "sec"}, h("h3", {}, "使い方"), it.uses.map(u => h("div", {class: "rule"}, h("b", {}, u.id), ` いつ：${u.when}　${u.text}`))));
+}
+
+function side() {
+  const s = $("#side"); s.replaceChildren();
+  for (const t of ["rules", "log", "metrics", "talk", "prog"]) $("#t-" + t).className = TAB === t ? "on" : "";
+  if (TAB === "rules") {
+    const rel = new Set((SEL && SEL.item && SEL.item.rules) || (SEL && VIEW.areas[SEL.id] && VIEW.areas[SEL.id].rules) || []);
+    s.append(h("p", {class: "help"}, rel.size ? "色つきは、選んだものに関係するルール" : "ルールの本文（自然文が正本）"));
+    DEF.rules.forEach(r => s.append(h("div", {class: "rule" + (rel.has(r.id) ? " hl" : "")}, h("b", {}, r.id), ` [${r.type || ""}] ${r.text}`)));
+    if (VIEW.automa_rules) s.append(h("div", {class: "sec"}, h("h3", {}, "この席のオートマのルール"), Object.entries(VIEW.automa_rules).map(([k, t]) => h("div", {class: "rule hl"}, h("b", {}, k), " " + t))));
+    const terms = Object.entries(DEF.terms);
+    if (terms.length) s.append(h("div", {class: "sec"}, h("h3", {}, "用語"), terms.map(([k, t]) => h("div", {class: "rule"}, h("b", {}, t.word || k), " " + t.text))));
+  } else if (TAB === "metrics") { // 指標（局面から数えて出す値。SPC-050）
+    const M = VIEW.metrics || {};
+    if (!Object.keys(M).length) s.append(h("p", {class: "help"}, "この定義には指標がない"));
+    s.append(h("p", {class: "help"}, "局面から数えて出す値。見えない値は出さない"));
+    for (const [id, m] of Object.entries(M)) {
+      const vals = m.values ? Object.entries(m.values).map(([p, v]) => `${p}: ${v}`).join("　") : (m.hidden ? "（見えない）" : m.value);
+      s.append(h("div", {class: "rule"}, h("b", {}, m.name), " ", vals, m.hidden_for ? h("span", {class: "help"}, `（${m.hidden_for.join("・")} は見えない）`) : null));
+    }
+  } else if (TAB === "talk") { // 発言（RUL-009）：見る立場で聞こえたこと。話すのは「操作する人」
+    const T = VIEW.talk || [];
+    s.append(h("p", {class: "help"}, "話したこと（見る立場で聞こえたもの。内緒話は、聞いていない人には話したことだけ）"));
+    const me = $("#by").value || "keeper";
+    const ST = {open: "受付中", accepted: "成立", declined: "断られた", withdrawn: "取り下げ", countered: "条件を変えて返された"};
+    const offerEl = (t, i) => !t.offer ? null : h("div", {class: "help"},
+      `提案 #${i}（${ST[t.status] || t.status}）：` + t.offer.map(o => `${o.obj}${o.n > 1 ? "×" + o.n : ""} ${o.from || ""}→${o.to || ""}`).join("、"),
+      t.status === "open" && me !== t.by && (me === "keeper" || (t.with ? [t.with] : (t.to || DEF.players.map(p => p.id))).includes(me))
+        ? h("span", {}, " ", h("button", {class: "small", onclick: () => op({op: "answer", talk: i, accept: true})}, "受ける"),
+            h("button", {class: "small", onclick: () => op({op: "answer", talk: i, accept: false})}, "断る")) : null,
+      t.status === "open" && me === t.by ? h("button", {class: "small", onclick: () => op({op: "answer", talk: i, accept: false})}, "取り下げる") : null);
+    s.append(h("div", {id: "talk"}, T.length ? T.map((t, i) => h("div", {class: "rule"}, h("b", {}, t.by || "keeper"),
+      t.to ? h("span", {class: "help"}, ` → ${t.to.join("・")}`) : null, " " + t.text, offerEl(t, t.n ?? i))) : h("p", {class: "empty"}, "まだ誰も話していない")));
+    const text = h("input", {class: "small", placeholder: "話すこと"});
+    const tos = DEF.players.map(pl => [pl.id, h("input", {type: "checkbox"})]);
+    s.append(h("form", {class: "sec", onsubmit: e => { e.preventDefault(); if (!text.value) return;
+        const to = tos.filter(([, c]) => c.checked).map(([id]) => id);
+        const offer = DRAFT && DRAFT.length ? DRAFT : null; DRAFT = null;
+        op({op: "say", text: text.value, ...(to.length ? {to} : {}), ...(offer ? {offer} : {})}); }},
+      h("h3", {}, `話す（${$("#by").value || "keeper"}）`), text,
+      h("div", {class: "help"}, "聞かせる相手（選ばなければ全員）：", tos.map(([id, c]) => h("label", {}, c, id + " "))),
+      DRAFT ? h("div", {class: "help", id: "draft"}, `組み立て中の提案（${DRAFT.length} 件）：` +
+        DRAFT.map(o => `${o.obj}${o.n > 1 ? "×" + o.n : ""} ${o.from || ""}→${o.to || ""}`).join("、") + "。卓で動かすと足される（実際には動かない）") : null,
+      h("div", {class: "btns"}, h("button", {type: "submit"}, DRAFT ? "提案として話す" : "話す"),
+        h("button", {type: "button", id: "draft-toggle", onclick: () => { DRAFT = DRAFT ? null : []; side(); }}, DRAFT ? "提案をやめる" : "提案を組み立てる"))));
+  } else if (TAB === "log") {
+    s.append(h("p", {class: "help"}, `${LOG.length} 件。bg op や API からの操作も同じ記録に入る（新しい順）`));
+    s.append(h("div", {id: "log"}, h("ol", {reversed: true}, [...LOG].reverse().map(o => {
+      const {op: k, by, rule, time, action, ...rest} = o;
+      return h("li", {}, `${action ? "[" + action + "] " : ""}${k} ${JSON.stringify(rest)}${by ? " by " + by : ""}${rule ? " rule " + rule : ""}`);
+    }))));
+  } else {
+    const sec = h("div", {});
+    for (const [k, v] of Object.entries(VIEW.progress)) {
+      const inp = h("input", {class: "small", value: v.value ?? "", placeholder: v.meaning || ""});
+      sec.append(h("div", {class: "sec"}, h("h3", {}, k + (v.meaning ? "：" + v.meaning : "")),
+        h("div", {class: "btns"}, inp, h("button", {onclick: () => op({op: "progress", key: k, value: inp.value})}, "設定"))));
+    }
+    const q = h("input", {class: "small", placeholder: "問い"}), d = h("input", {class: "small", placeholder: "決定"}), r = h("input", {class: "small", placeholder: "理由"});
+    sec.append(h("div", {class: "sec"}, h("h3", {}, "裁定（ルール文で決着しないとき）"), q, d, r,
+      h("div", {class: "btns"}, h("button", {onclick: () => q.value && op({op: "ruling", question: q.value, decision: d.value, reason: r.value, rules: $("#rule").value ? [$("#rule").value] : []})}, "裁定を記録"))));
+    const res = DEF.players.map(pl => [pl.id, h("select", {}, ["", "win", "lose", "draw"].map(x => h("option", {value: x}, x || "—")))]);
+    sec.append(h("div", {class: "sec"}, h("h3", {}, "終了と結果"), res.map(([id, sel]) => h("div", {}, id + " ", sel)),
+      h("div", {class: "btns"}, h("button", {onclick: () => { const results = Object.fromEntries(res.filter(([, x]) => x.value).map(([id, x]) => [id, x.value])); op({op: "end", results}); }}, "終了を記録"))));
+    if (VIEW.result) sec.append(h("p", {}, "結果：" + JSON.stringify(VIEW.result)));
+    s.append(sec);
+  }
+}
+
+let FOLD = new Set();
+try { FOLD = new Set(JSON.parse(localStorage.getItem("bg-fold") || "[]")); } catch (e) {}
+function toggleFold(id) {
+  FOLD.has(id) ? FOLD.delete(id) : FOLD.add(id);
+  try { localStorage.setItem("bg-fold", JSON.stringify([...FOLD])); } catch (e) {}
+  render();
+}
+function areaById(id, list = DEF.areas) {
+  for (const a of list) { if (a.id === id) return a; const f = areaById(id, a.areas || []); if (f) return f; }
+}
+function tableEl() {
+  const T = DEF.table, ids = DEF.players.map(p => p.id), n = ids.length;
+  const vi = Math.max(0, ids.indexOf($("#as").value));
+  const seatOf = {}; ids.forEach((p, i) => seatOf[p] = T.seats[ids[(i - vi + n) % n]]); // 見る立場の人を手前へ回す
+  const cells = {top: [], bottom: [], left: [], right: [], center: []}, used = new Set();
+  const take = id => { const a = areaById(id); if (a) used.add(a.id); return a; };
+  cells.center.push(...T.center.map(take).filter(Boolean).map(areaEl));
+  for (const p of ids) {
+    const seat = seatOf[p], pl = DEF.players.find(x => x.id === p);
+    let list = T.per_player[p].map(take).filter(Boolean);
+    if (seat === "top") list = list.reverse(); // 対面は中央に近いものを下に
+    const who = DEF.seats && DEF.seats[p] ? `（着席：${DEF.seats[p]}）` : "";
+    const badges = (DEF.metrics || []).filter(m => m.badge && m.per === "player").map(m => {
+      const v = VIEW.metrics && VIEW.metrics[m.id] && VIEW.metrics[m.id].values ? VIEW.metrics[m.id].values[p] : undefined;
+      return v === undefined ? null : h("span", {class: "mbadge", title: m.text || m.name}, `${m.name} ${v}`);
+    });
+    cells[seat].push(h("div", {class: `seat ${seat}` + (p === $("#as").value ? " me" : "")}, h("div", {class: "label"}, `${p} ${pl.name || ""}${who}`, badges), list.map(areaEl)));
+  }
+  for (const [id, cell] of Object.entries(T.place || {})) { const a = take(id); if (a && cells[cell]) cells[cell].push(areaEl(a)); }
+  const side = cells.left.length || cells.right.length;
+  const grid = h("div", {class: "tablegrid"});
+  grid.style.gridTemplateColumns = side ? "minmax(0,1fr) minmax(0,2fr) minmax(0,1fr)" : "minmax(0,1fr)";
+  const wideRow = k => cells[k].length > 1 ? `"${k} ${k} ${k}"` : `". ${k} ."`; // 辺に席が複数（5 人以上）なら卓の幅いっぱいに
+  grid.style.gridTemplateAreas = side ? `${wideRow("top")} "left center right" ${wideRow("bottom")}` : '"top" "center" "bottom"';
+  for (const [k, els] of Object.entries(cells)) if (els.length) { const c = h("div", {class: "cell " + k}, els); c.style.gridArea = k; grid.append(c); }
+  const rest = DEF.areas.filter(a => !used.has(a.id));
+  return [grid, rest.length ? h("div", {class: "outside"}, h("h3", {}, "卓の外"), rest.map(areaEl)) : null];
+}
+// エリアのつながり（リンク）を卓の上に線で重ねる
+function drawLinks() {
+  const t = $("#table"); t.querySelector("svg.links")?.remove();
+  if (!$("#showlinks").checked || !DEF.links.length) return;
+  const NS = "http://www.w3.org/2000/svg", svg = document.createElementNS(NS, "svg"), box = t.getBoundingClientRect();
+  svg.setAttribute("class", "links");
+  const z = parseFloat(t.style.zoom) || 1; // 拡大縮小した卓では、画面上の位置を卓の中の位置に戻す
+  const center = id => { const el = t.querySelector(`[data-area="${CSS.escape(id)}"]`); if (!el) return null; const r = el.getBoundingClientRect(); return [(r.left + r.width / 2 - box.left) / z, (r.top + r.height / 2 - box.top) / z]; };
+  const inHex = id => { const el = t.querySelector(`[data-area="${CSS.escape(id)}"]`); return el && (/hex(cell|vertex|edge)/.test(el.className) || el.closest(".rectwrap.plain")); };
+  for (const l of DEF.links) {
+    if ((l.between || []).every(inHex)) continue; // 六角の盤・地図の中のつながりは配置から読めるので線を描かない
+    const [a, b] = (l.between || []).map(center);
+    if (!a || !b) continue;
+    const line = document.createElementNS(NS, "line");
+    [["x1", a[0]], ["y1", a[1]], ["x2", b[0]], ["y2", b[1]]].forEach(([k, v]) => line.setAttribute(k, v));
+    const tx = document.createElementNS(NS, "text"); tx.setAttribute("x", (a[0] + b[0]) / 2 + 4); tx.setAttribute("y", (a[1] + b[1]) / 2 - 4);
+    tx.textContent = l.type || "link"; const tt = document.createElementNS(NS, "title"); tt.textContent = l.text || ""; line.append(tt);
+    svg.append(line, tx);
+  }
+  t.append(svg);
+}
+
+function render() {
+  $("#table").replaceChildren(...(DEF.table ? tableEl() : DEF.areas.map(areaEl)).filter(Boolean));
+  requestAnimationFrame(drawLinks);
+  if (SEL && SEL.type === "item") { // 動いた後も同じ部品を指す
+    const find = (items, c) => { for (const it of items || []) { if (it.id === SEL.id) return [it, c]; const f = find(it.stacked, it.id); if (f) return f; } };
+    let hit; for (const [aid, v] of Object.entries(VIEW.areas)) if (Array.isArray(v.shown) && (hit = find(v.shown, aid))) break;
+    if (hit) { SEL.item = hit[0]; SEL.container = hit[1]; } else SEL = null;
+  }
+  inspect(); side(); actionsEl();
+}
+
+async function boot() {
+  DEF = await api("/api/def");
+  let saved = null; try { saved = localStorage.getItem("bg-fold"); } catch (e) {}
+  if (saved === null) { const walk = a => { if (a.folded) FOLD.add(a.id); (a.areas || []).forEach(walk); }; DEF.areas.forEach(walk); } // 定義の folded：最初はたたむ（表示だけ）
+  document.title = $("#title").textContent = `${DEF.game.name || DEF.game.id}（版 ${DEF.game.version ?? "—"}）`;
+  if (DEF.assets && DEF.assets.credit && !$(".credit")) document.body.append(h("div", {class: "credit"}, "画像：" + DEF.assets.credit));
+  $("#as").append(h("option", {value: ""}, "キーパー（すべて）"), ...DEF.players.map(p => h("option", {value: p.id}, `${p.id} ${p.name || ""}`)));
+  $("#by").append(h("option", {value: "keeper"}, "keeper"), ...DEF.players.map(p => h("option", {value: p.id}, p.id)));
+  $("#rule").append(...DEF.rules.map(r => h("option", {value: r.id}, r.id)));
+  $("#as").onchange = () => refresh(true);
+  $("#showlinks").onchange = drawLinks;
+  const OPTS = [["ids", "部品の ID"], ["states", "状態"], ["vis", "公開範囲"], ["orient", "縦横の印"], ["meta", "エリアの ID・持ち主"], ["hidden", "見えない理由"], ["help", "操作の説明"]];
+  let on = []; try { on = JSON.parse(localStorage.getItem("bg-show") || "[]"); } catch (e) {}
+  for (const [k, label] of OPTS) {
+    const cb = h("input", {type: "checkbox", id: "show-" + k});
+    cb.checked = on.includes(k); document.body.classList.toggle("show-" + k, cb.checked);
+    cb.onchange = () => { document.body.classList.toggle("show-" + k, cb.checked); try { localStorage.setItem("bg-show", JSON.stringify(OPTS.map(o => o[0]).filter(x => $("#show-" + x).checked))); } catch (e) {} requestAnimationFrame(drawLinks); };
+    $("#showopts").append(h("label", {}, cb, " " + label));
+  }
+  $("#by").onchange = actionsEl;
+  // 卓を広く使う：横の欄をたたむ・卓を拡大縮小する（表示だけ。見る人のブラウザに覚える）
+  let ui = {}; try { ui = JSON.parse(localStorage.getItem("bg-ui") || "{}"); } catch (e) {}
+  const saveUi = () => { try { localStorage.setItem("bg-ui", JSON.stringify(ui)); } catch (e) {} };
+  const applyUi = () => {
+    for (const k of ["inspect", "side"]) { document.body.classList.toggle("hide-" + k, !!ui["hide_" + k]); $("#tog-" + k).setAttribute("aria-pressed", String(!ui["hide_" + k])); }
+    $("#zoom").value = String(ui.zoom || 1); $("#table").style.zoom = ui.zoom || 1; requestAnimationFrame(() => { render(); });
+  };
+  for (const k of ["inspect", "side"]) $("#tog-" + k).onclick = () => { ui["hide_" + k] = !ui["hide_" + k]; saveUi(); applyUi(); };
+  $("#zoom").onchange = () => { ui.zoom = parseFloat($("#zoom").value); saveUi(); applyUi(); };
+  document.body.classList.toggle("hide-inspect", !!ui.hide_inspect); document.body.classList.toggle("hide-side", !!ui.hide_side);
+  $("#table").style.zoom = ui.zoom || 1; $("#zoom").value = String(ui.zoom || 1);
+  addEventListener("resize", () => requestAnimationFrame(drawLinks));
+  for (const t of ["rules", "log", "metrics", "talk", "prog"]) $("#t-" + t).onclick = () => { TAB = t; side(); };
+  await refresh(true);
+  setInterval(() => refresh(false).catch(e => toast(e.message)), 1500); // エージェントの操作を拾う
+}
+boot().catch(e => toast(e.message));
+</script>
+</body>
+</html>
