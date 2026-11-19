@@ -251,10 +251,10 @@ async function op(o) {
 }
 
 async function refresh(force) {
-  const log = await api("/api/log");
+  const as = $("#as").value;
+  const log = await api(`/api/log${as ? "?as=" + encodeURIComponent(as) : ""}`);  // 記録も見る立場で伏せる
   if (!force && log.length === LOG.length && VIEW) return;
   LOG = log;
-  const as = $("#as").value;
   VIEW = await api(`/api/view?meaning=1${as ? "&as=" + encodeURIComponent(as) : ""}`);
   render();
 }

@@ -252,6 +252,9 @@ def classify(d: Definition, f: dict | None, action: str, actor: str) -> tuple[st
     if act.get("by") and actor not in act["by"]:  # アクションを行える人（例：拒否・死亡の処理は脚本家）
         return "other", [f"「{act.get('name', action)}」を行うのは {'・'.join(act['by'])}"]
     st = _stage(d, f)
+    bound = action in flow_actions(d)  # 進行のどこか（段階・フェーズ・free・reactions）に書いたアクション
+    if not f.get("stage"):  # 進行が終わった（巡の上限を超えた・最後の段階の後）
+        return "other", ([f"進行が終わっている（段階がない）。「{act.get('name', action)}」は行えない"] if bound else [])
     if not st.get("turn"):
         ok = action in (st.get("actions") or [])
         return ("stage" if ok else "other"), ([] if ok or not st.get("actions") else
@@ -297,7 +300,22 @@ def classify(d: Definition, f: dict | None, action: str, actor: str) -> tuple[st
         cls = "other"
         if any(action in (p.get("main") or []) for p in t.get("phases") or []):
             warns.append(f"今のフェーズ（{phase.get('name', f['phase'])}）のアクションではない")
+        elif bound:  # ほかの段階・手番のアクション（準備だけの引き直しを、対戦中に行う）
+            warns.append(f"段階「{st.get('name', st.get('id'))}」のアクションではない")
     return cls, warns
+
+
+def flow_actions(d: Definition) -> set:
+    """進行の構造に書かれたアクション。どこにも書かれていないアクション（キーパーの道具など）は進行で縛らない。"""
+    fl = _flow(d) or {}
+    out = set()
+    for st in fl.get("stages") or []:
+        out |= set(st.get("actions") or [])
+    for t in (fl.get("turns") or {}).values():
+        for p in t.get("phases") or []:
+            out |= set(p.get("main") or [])
+        out |= {x["action"] for key in ("free", "reactions") for x in t.get(key) or []}
+    return out
 
 
 def record(d: Definition, f: dict | None, action: str, actor: str) -> dict | None:

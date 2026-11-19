@@ -111,3 +111,61 @@ def test_end_result_preview_and_complexity(tmp_path):
     assert end_result(s.defn, s.state(), ("now", "round_end")) is None
     c = complexity(s.defn)
     assert c["end_conditions"] == {"count": 1, "with_result": 1, "timed": 1} and c["scoring"] and c["rules_text_only"]["ids"] == ["R1"]
+
+
+def test_playstats_and_quiz(tmp_path, capsys):
+    """目的の物差し（RUL-016）：bg playstats はコマンドと拒否を数え、bg quiz は「行えるか」の問いと正解（エンジンの判定）を作る。"""
+    from pathlib import Path
+    import yaml
+    from bgskills.cli import main
+    ex = Path(__file__).parent.parent / "examples" / "rune-clash.yaml"
+    d = str(tmp_path / "s")
+    main(["new", d, "--def", str(ex), "--players", "2", "--seed", "1"])
+    main(["act", d, "setup"]); main(["advance", d, "--to", "stage"])
+    main(["act", d, "cast-bolt", "--by", "P1", "--arg", "card=P1-bolt-1"])  # 引く前・ルーンなし → 拒否
+    capsys.readouterr()
+    main(["playstats", d])
+    st = yaml.safe_load(capsys.readouterr().out)
+    assert st["acting"] == 3 and st["rejected"] == 1 and st["per_seat"]["P1"]["rejected"] == 1
+    main(["quiz", str(ex), "--players", "2", "--n", "4", "--seed", "1", "--out", str(tmp_path / "q")])
+    capsys.readouterr()
+    ans = yaml.safe_load((tmp_path / "q" / "answers.yaml").read_text(encoding="utf-8"))
+    assert len(ans) == 4 and all(v["answer"] in ("yes", "no") for v in ans.values())
+    (tmp_path / "r.yaml").write_text(yaml.safe_dump({k: v["answer"] for k, v in ans.items()}), encoding="utf-8")
+    main(["quiz-grade", str(tmp_path / "q" / "answers.yaml"), str(tmp_path / "r.yaml")])
+    assert yaml.safe_load(capsys.readouterr().out)["accuracy"] == 1.0
+
+
+def test_schema_unknown_keys_and_expr_braces(tmp_path, capsys):
+    """形式の正本（schema.py）：bg check は知らない項目を似た項目つきで、式の中の {x} を指摘する。bg schema は JSON Schema。"""
+    import json
+    from bgskills.cli import main
+    from bgskills.definition import load
+    from bgskills.tools import check_refs
+    (tmp_path / "race.yaml").write_text(RACE.replace("  auto_end: true", "  auto_ends: true").replace(
+        "on('hand-' + active())[3:]", "on('hand-{player}')[3:]"), encoding="utf-8")
+    refs = [r["ref"] for r in check_refs(load(tmp_path / "race.yaml", 3))]
+    assert any("知らない項目 auto_ends（auto_end のことか）" in r for r in refs)
+    assert any("{player} ではなく" in r for r in refs)
+    capsys.readouterr()
+    main(["schema"])
+    sch = json.loads(capsys.readouterr().out)
+    assert "auto_end" in sch["properties"]["flow"]["properties"] and sch["additionalProperties"] is False
+
+
+def test_quiz_findings_stage_binding_and_flow_end(tmp_path):
+    """小テスト（RUL-016）で見つけた穴：進行のどこかに書いたアクションは、ほかの段階では行えない（準備だけの引き直し）。
+    進行が終わったら（段階がない）、進行に書いたアクションは行えない。採点は YAML の yes/no（真偽値）も受ける。"""
+    from pathlib import Path
+    from bgskills.flow import classify
+    from bgskills.tools import quiz_grade
+    ex = Path(__file__).parent.parent / "examples"
+    s = Session.create(tmp_path / "d", ex / "beast-duel.yaml", 2, {}, 3)
+    s.act("setup", "keeper")
+    s.apply({"op": "advance", "to": "stage", "by": "keeper"})
+    assert any("段階「" in w for w in classify(s.defn, s.state()["flow"], "mulligan", "P1")[1])
+    f = {**s.state()["flow"], "stage": None}
+    assert any("進行が終わっている" in w for w in classify(s.defn, f, "attack", "P1")[1])
+    (tmp_path / "a.yaml").write_text("q01: {answer: 'yes', why: ''}\nq02: {answer: 'no', why: x}\n", encoding="utf-8")
+    (tmp_path / "r.yaml").write_text("q01: yes\nq02: no\n", encoding="utf-8")
+    assert quiz_grade(tmp_path / "a.yaml", tmp_path / "r.yaml")["accuracy"] == 1.0

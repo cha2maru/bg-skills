@@ -81,8 +81,10 @@ def make_handler(session_dir):
                     if not ctype:
                         return self._send(404, {"error": "not found"})
                     self._send(200, f.read_bytes(), ctype)
-                elif u.path == "/api/log":
-                    self._send(200, s.log())
+                elif u.path == "/api/log":  # 見る立場（as）で伏せる。省けばキーパー
+                    from .redact import visible_log
+                    who = (parse_qs(u.query).get("as") or [None])[0] or None
+                    self._send(200, visible_log(s, who))
                 elif u.path == "/api/candidates":  # アクションの引数の候補と条件（SPC-052）
                     from .query import candidates
                     args = json.loads(q["args"]) if q.get("args") else None

@@ -124,6 +124,8 @@ def check_refs(d: Definition) -> list[dict]:
         if fl.get("cycle") and fl["cycle"].get(key) not in sids:
             bad.append({"where": f"flow.cycle.{key}", "ref": fl["cycle"].get(key)})
     bad += check_exprs(d)
+    from .schema import unknown_keys
+    bad += unknown_keys(d.raw if hasattr(d, "raw") else d.data)  # 形式に無い項目（打ち間違い）
     for i, l in enumerate(d.data.get("links") or []):
         for x in l.get("between") or []:
             need(f"links[{i}].between", x)
@@ -188,6 +190,8 @@ def check_exprs(d: Definition) -> list[dict]:
                 for name, src in srcs.items():
                     if isinstance(src, str):
                         msg = problems(re.sub(r"\{(\w+)\}", r"\1", src), known) or _unknown_names(d, src)  # {引数} は値に置き換わる
+                        if not msg and re.search(r"\{(\w+)\}", src):  # 式の中は変数をそのまま書く（{x} の置き換えと二通りにしない）
+                            msg = "式の中では {" + re.search(r"\{(\w+)\}", src).group(1) + "} ではなく、そのまま " + re.search(r"\{(\w+)\}", src).group(1) + " と書く"
                         if msg:
                             out.append({"where": f"{where}.{name}", "ref": f"{src}（{msg}）"})
                 walk(v, f"{where}.{k}" if where else k)
@@ -333,82 +337,81 @@ def fuzz(path, players: int, games: int = 3, steps: int = 80, seed: int = 0) -> 
             "crashes": [{"error": k, "trace": v} for k, v in crashes.items()]}
 
 
+def random_step(s, rnd, staged: dict, max_turns: int = 60) -> str | None:
+    """でたらめの 1 歩（selfplay・quiz で使う）：手番の人が今行える手から、条件を満たす候補で選んで行う。
+    行えるものがなければ進行を進める。スタックがあれば見送る。終わったら終わり方の文を返す（続くなら None）。"""
+    from .flow import available, end_signals
+    from .query import candidates
+    from .session import OpError, _stack_next
+    st = s.state()
+    if st["result"] is not None:  # 自動で終わった（flow.auto_end）・終わらせるアクション
+        r = st["result"]
+        return r.get("text") or "・".join(f"{p}:{v}" for p, v in (r.get("results") or {}).items())
+    sig = end_signals(s.defn, st)
+    if sig:
+        return sig[0]
+    f = st.get("flow") or {}
+    if f.get("turn_no", 0) > max_turns or not f.get("stage"):
+        return "決着なし"
+    if st.get("stack"):  # 見送り待ちの人が見送る（応じる手は打たない）
+        nxt = _stack_next(s.defn, st)["by"]
+        waiting = [p for p in s.defn.players if p != nxt and p not in (st.get("stack_passes") or [])]
+        s.apply({"op": "pass", "by": waiting[0]}) if waiting else s.apply({"op": "resolve", "by": "keeper"})
+        return None
+    acts = {a["id"]: a for a in s.defn.data.get("actions") or []}
+    who = f.get("active") or "keeper"
+    av = available(s.defn, f, who)
+    stage_done = staged.setdefault(f.get("stage"), set())  # 手番のない段階（準備）のアクションは 1 人 1 回ずつ
+    if f.get("active"):
+        pairs = [(i, who) for k in ("main", "free") for i in av.get(k, [])]
+    else:  # 手番のない段階（準備・人狼の昼夜）：キーパーと各プレイヤーを、行う人として試す
+        pairs = [(i, p) for p in ["keeper"] + list(s.defn.players)
+                 for i in available(s.defn, f, p).get("stage", []) if (i, p) not in stage_done]
+    pairs = [(i, p) for i, p in pairs if "'op': 'end'" not in str(acts[i].get("steps"))]
+    for aid, actor in [x for x in rnd.sample(pairs, len(pairs)) for _ in range(6)]:  # 引数の選び直しも試す
+        a, args = acts[aid], {}
+        try:
+            for prm in a.get("params") or []:
+                if prm.get("free") or prm.get("pick") == "first":
+                    continue
+                good = [c["id"] for c in candidates(s.defn, s.state(), aid, actor, prm["name"], args) if not c["problems"]]
+                if not good:
+                    raise OpError("候補がない")
+                args[prm["name"]] = rnd.choice(good)
+            s.act(aid, actor, args)
+            if not f.get("active"):
+                stage_done.add((aid, actor))
+            return None
+        except OpError:
+            continue
+    for to in (("turn", "stage") if f.get("active") else ("stage", "phase")):
+        try:
+            s.apply({"op": "advance", "by": "keeper", "to": to})
+            return None
+        except OpError:
+            continue
+    return "進められない"
+
+
 def selfplay(path, players: int, games: int = 20, max_turns: int = 60, seed: int = 0) -> dict:
-    """作品を問わない対戦（バランスの目安）：手番の人が、今行えるアクション（進行の available）から、条件を満たす候補で
-    でたらめに選ぶ。行えるものがなければ手番を進める。スタックがあれば、見送り待ちの人が見送る。終わり（end_when の知らせか、
-    op: end）で止め、結果ごとに数える。作品専用のボットより弱く、強い手を選ばない（偏りの目安で、強さの比較ではない）。"""
+    """作品を問わない対戦（バランスの目安）：random_step を終わるまで繰り返し、終わり方ごとに数える。
+    作品専用のボットより弱く、強い手を選ばない（偏りの目安で、強さの比較ではない）。"""
     import random
     import tempfile
     from collections import Counter
     from pathlib import Path
-    from .flow import available, end_signals
-    from .query import candidates
-    from .session import OpError, Session, _stack_next
+    from .session import Session
     outcomes, turns = Counter(), []
     for g in range(games):
         rnd = random.Random(f"{seed}:{g}")
         s = Session.create(Path(tempfile.mkdtemp()) / "s", path, players, {}, seed + g, strict=True)
-        acts = {a["id"]: a for a in s.defn.data.get("actions") or []}
-        result, staged = None, {}
         if not (s.defn.data.get("flow") or {}).get("stages"):
             return {"error": "進行（flow）のない定義は、手番の人が分からないので selfplay できない"}
+        staged, result = {}, None
         for _ in range(max_turns * 30):
-            st = s.state()
-            if st["result"] is not None:  # 自動で終わった（flow.auto_end）・終わらせるアクション
-                r = st["result"]
-                result = r.get("text") or "・".join(f"{p}:{v}" for p, v in (r.get("results") or {}).items())
+            result = random_step(s, rnd, staged, max_turns)
+            if result:
                 break
-            sig = end_signals(s.defn, st)
-            if sig:
-                result = sig[0]
-                break
-            f = st.get("flow") or {}
-            if f.get("turn_no", 0) > max_turns or not f.get("stage"):
-                result = "決着なし"
-                break
-            if st.get("stack"):  # 見送り待ちの人が見送る（応じる手は打たない）
-                nxt = _stack_next(s.defn, st)["by"]
-                waiting = [p for p in s.defn.players if p != nxt and p not in (st.get("stack_passes") or [])]
-                s.apply({"op": "pass", "by": waiting[0]}) if waiting else s.apply({"op": "resolve", "by": "keeper"})
-                continue
-            who = f.get("active") or "keeper"
-            av = available(s.defn, f, who)
-            stage_done = staged.setdefault(f.get("stage"), set())  # 手番のない段階（準備）のアクションは 1 回ずつ
-            if f.get("active"):
-                pairs = [(i, who) for k in ("main", "free") for i in av.get(k, [])]
-            else:  # 手番のない段階（準備・人狼の昼夜）：キーパーと各プレイヤーを、行う人として試す。1 人 1 回ずつ
-                pairs = [(i, p) for p in ["keeper"] + list(s.defn.players)
-                         for i in available(s.defn, f, p).get("stage", []) if (i, p) not in stage_done]
-            pairs = [(i, p) for i, p in pairs if "'op': 'end'" not in str(acts[i].get("steps"))]
-            done = False
-            for aid, actor in [x for x in rnd.sample(pairs, len(pairs)) for _ in range(6)]:  # 引数の選び直しも試す
-                if done:
-                    break
-                a, args = acts[aid], {}
-                try:
-                    for prm in a.get("params") or []:
-                        if prm.get("free") or prm.get("pick") == "first":
-                            continue
-                        good = [c["id"] for c in candidates(s.defn, s.state(), aid, actor, prm["name"], args) if not c["problems"]]
-                        if not good:
-                            raise OpError("候補がない")
-                        args[prm["name"]] = rnd.choice(good)
-                    s.act(aid, actor, args)
-                    if not f.get("active"):
-                        stage_done.add((aid, actor))
-                    done = True
-                except OpError:
-                    continue
-            if not done:
-                for to in (("turn", "stage") if f.get("active") else ("stage", "phase")):
-                    try:
-                        s.apply({"op": "advance", "by": "keeper", "to": to})
-                        break
-                    except OpError:
-                        continue
-                else:
-                    result = "進められない"
-                    break
         outcomes[result or "打ち切り"] += 1
         turns.append((s.state().get("flow") or {}).get("turn_no", 0))
     return {"games": games, "outcomes": dict(outcomes.most_common()), "avg_turns": round(sum(turns) / max(1, len(turns)), 1)}
@@ -440,15 +443,31 @@ def complexity(d: Definition) -> dict:
             nodes += sum(1 for _ in ast.walk(ast.parse(e.replace("{", "").replace("}", ""), mode="eval")))
         except SyntaxError:
             pass
-    used = {a.get("rule") for a in acts} | {c.get("rule") for c in (d.data.get("flow") or {}).get("end_when") or []}
-    text_only = [r["id"] for r in rules if r["id"] not in used]
     fl = d.data.get("flow") or {}
+    layer = {r["id"]: [] for r in rules}  # ルールごとの機械の層（どのアクション・終わりの条件・指標・知らせがそのルールを行うか）
+    for a in acts:
+        if a.get("rule") in layer:
+            n = len(a.get("require") or []) + sum(len(p.get("require") or []) for p in a.get("params") or [])
+            layer[a["rule"]].append(f"action {a['id']}" + (f"（条件 {n}）" if n else ""))
+    for key in ("end_when", "signals"):
+        for c in fl.get(key) or []:
+            if c.get("rule") in layer:
+                layer[c["rule"]].append(key)
+            for rid in re.findall(r"R\d+", c.get("text") or ""):
+                if rid in layer and key not in layer[rid]:
+                    layer[rid].append(key)
+    for m in d.data.get("metrics") or []:
+        for rid in m.get("refs") or []:
+            if rid in layer:
+                layer[rid].append(f"metric {m['id']}")
+    text_only = [rid for rid, xs in layer.items() if not xs]
     phases = sum(len(t.get("phases") or []) for t in (fl.get("turns") or {}).values())
     conds = sum(len(a.get("require") or []) + sum(len(p.get("require") or []) for p in a.get("params") or []) for a in acts)
     end = fl.get("end_when") or []
     return {
         "rules": len(rules), "rule_chars": sum(len(r.get("text") or "") for r in rules),
-        "rules_text_only": {"count": len(text_only), "ids": text_only},  # どのアクション・終わりの条件にも結びつかないルール
+        "rules_text_only": {"count": len(text_only), "ids": text_only},  # 機械の層がないルール（キーパーが文で裁く）
+        "machine_layer": {rid: xs for rid, xs in layer.items() if xs},  # ルールごとに、機械で行う部分
         "actions": len(acts), "params": sum(len(a.get("params") or []) for a in acts), "conditions": conds,
         "steps": sum(len(a.get("steps") or []) for a in acts), "expressions": len(exprs), "expression_nodes": nodes,
         "stages": len(fl.get("stages") or []), "phases": phases,
@@ -456,3 +475,114 @@ def complexity(d: Definition) -> dict:
                            "timed": sum(1 for c in end if c.get("timing") not in (None, "now"))},
         "scoring": bool(fl.get("scoring")), "kinds": len(d.kinds), "parts": len(d.parts), "areas": len(d.areas),
     }
+
+
+ACTING = {"act", "op", "say", "answer", "pass", "resolve", "advance", "undo"}
+
+
+def playstats(s) -> dict:
+    """エージェントが対局でどれだけ迷ったかの物差し（目的「定義を不足なく読める」を測る）。
+    コマンドの数（調べる・行う）、受け付けなかった行為（厳格モードの拒否・条件や引数の誤り）、手番あたり、プレイヤーごと。"""
+    import json
+    from collections import Counter
+    path = s.dir / "usage.jsonl"
+    rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line] if path.exists() else []
+    turns = max(1, ((s.state().get("flow") or {}).get("turn_no") or 1))
+    acting = [r for r in rows if r["cmd"] in ACTING]
+    rejected = [r for r in acting if r.get("error")]
+    per = {}
+    for r in rows:
+        w = r.get("who") or "-"
+        p = per.setdefault(w, {"commands": 0, "acting": 0, "rejected": 0})
+        p["commands"] += 1
+        p["acting"] += r["cmd"] in ACTING
+        p["rejected"] += r["cmd"] in ACTING and bool(r.get("error"))
+    reasons = Counter(r["error"].split("：", 1)[-1][:40] for r in rejected)
+    return {"turns": turns, "commands": len(rows), "by_command": dict(Counter(r["cmd"] for r in rows).most_common()),
+            "acting": len(acting), "rejected": len(rejected),
+            "rejected_rate": round(len(rejected) / max(1, len(acting)), 3),
+            "commands_per_turn": round(len(rows) / turns, 1), "per_seat": per,
+            "top_rejections": dict(reasons.most_common(8))}
+
+
+def quiz(path, players: int, n: int = 20, seed: int = 0, out=None) -> dict:
+    """ルールの理解の小テスト：でたらめに進めた局面で「Pn は今、このアクションをこの引数で行えるか」を問う。
+    正解はエンジン（厳格モード）の判定。問題ごとに局面を写した対局のフォルダを作る（bg show --as で見て答える。
+    bg candidates は答えそのものなので使わせない）。答えは answers.yaml に分けて書く。"""
+    import random
+    import shutil
+    import tempfile
+    from pathlib import Path
+    import yaml as _yaml
+    from .query import candidates
+    from .session import OpError, Session
+    out = Path(out or tempfile.mkdtemp())
+    out.mkdir(parents=True, exist_ok=True)
+    rnd = random.Random(seed)
+    qs, answers = [], {}
+    g = 0
+    while len(qs) < n and g < n * 10:
+        g += 1
+        s = Session.create(out / f"_base{g}", path, players, {}, seed * 1000 + g, strict=True)
+        acts = s.defn.data.get("actions") or []
+        staged = {}
+        for _ in range(rnd.randint(3, 120)):  # でたらめに進める（selfplay と同じ 1 歩）
+            if random_step(s, rnd, staged):
+                break
+        if s.state()["result"] is not None:
+            continue
+        # 問い：プレイヤーのアクションと引数（条件を満たす候補と満たさない候補を半々に）
+        pa = [a for a in acts if "keeper" not in (a.get("by") or [])]
+        if not pa:
+            break
+        a = rnd.choice(pa)
+        act_now = (s.state().get("flow") or {}).get("active")
+        who = act_now if act_now and rnd.random() < 0.7 else rnd.choice(list(s.defn.players))  # 手番の人に寄せる（易しい問いを減らす）
+        args, okish = {}, rnd.random() < 0.5
+        try:
+            for prm in a.get("params") or []:
+                if prm.get("free") or prm.get("pick") == "first":
+                    continue
+                cs = candidates(s.defn, s.state(), a["id"], who, prm["name"], args)
+                pool = [c["id"] for c in cs if bool(c["problems"]) != okish] or [c["id"] for c in cs]
+                if not pool:
+                    raise OpError("候補がない")
+                args[prm["name"]] = rnd.choice(pool)
+        except (OpError, ValueError):
+            continue
+        qid = f"q{len(qs) + 1:02d}"
+        qdir = out / qid
+        shutil.copytree(s.dir, qdir)
+        (qdir / "usage.jsonl").unlink(missing_ok=True)
+        trial = out / f"_trial_{qid}"
+        shutil.copytree(s.dir, trial)
+        try:
+            Session(trial).act(a["id"], who, args)
+            truth, why = True, ""
+        except OpError as e:
+            truth, why = False, str(e).replace("厳格モードで受け付けない：", "")
+        shutil.rmtree(trial)
+        qs.append({"id": qid, "session": str(qdir), "as": who, "action": a["id"], "args": args,
+                   "question": f"{who} は今、{a.get('name', a['id'])}（{a['id']}）を {args or '引数なし'} で行えるか（yes/no と理由）"})
+        answers[qid] = {"answer": "yes" if truth else "no", "why": why}
+    for p in out.glob("_base*"):
+        shutil.rmtree(p)
+    (out / "quiz.yaml").write_text(_yaml.safe_dump({"definition": str(path), "questions": qs}, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    (out / "answers.yaml").write_text(_yaml.safe_dump(answers, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    return {"out": str(out), "questions": len(qs), "yes": sum(v["answer"] == "yes" for v in answers.values())}
+
+
+def quiz_grade(answers_path, responses_path) -> dict:
+    """小テストの採点。responses は {qid: yes|no}（または {qid: {answer: yes|no}}）。"""
+    import yaml as _yaml
+    ans = _yaml.safe_load(open(answers_path, encoding="utf-8"))
+    res = _yaml.safe_load(open(responses_path, encoding="utf-8")) or {}
+    wrong = []
+    for q, a in ans.items():
+        r = res.get(q)
+        r = (r or {}).get("answer") if isinstance(r, dict) else r
+        r = {True: "yes", False: "no"}.get(r, r) if isinstance(r, bool) else r  # YAML の yes/no は真偽値になる
+        if str(r).strip().lower() != a["answer"]:
+            wrong.append({"id": q, "expected": a["answer"], "got": r, "why": a["why"]})
+    return {"questions": len(ans), "correct": len(ans) - len(wrong), "accuracy": round((len(ans) - len(wrong)) / max(1, len(ans)), 3),
+            "wrong": wrong}

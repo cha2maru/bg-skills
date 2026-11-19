@@ -80,40 +80,7 @@ def _title(d, i):
     return x and ((x.get("attributes") or {}).get("title") or x.get("name"))
 
 
-def _visible_ops(s, state, ops, player):
-    """操作の記録を、player から今見えない部品の ID を伏せて返す。出目などの結果を添える。"""
-    from .metrics import _area_of, _face_visible
-    out = []
-    secret = {a["id"] for a in s.defn.data.get("actions") or [] if a.get("secret")}
-    for o in ops:
-        o = dict(o)
-        if player and o.get("by") != player and o.get("action") in secret:  # 非公開の行為（人狼の夜の行動）は、あったことも件数も見せない
-            continue
-        if player and o.get("op") == "say" and o.get("to") is not None and o.get("by") != player and player not in (
-                [o["to"]] if isinstance(o["to"], str) else o["to"]):
-            if o.get("hidden"):  # 夜の内緒話など：あったことも見せない
-                continue
-            o["text"] = "（内緒話）"
-            o.pop("offer", None)
-        obj = o.get("obj")
-        if player and isinstance(obj, str) and obj in s.defn.parts and s.defn.distinct(obj):
-            where = next((c for c, items in state["places"].items() if obj in items), None)
-            area = _area_of(s.defn, state, where) if where else None
-            if area and not _face_visible(s.defn, state, obj, area, player):
-                o["obj"] = "（見えない部品）"
-                if "value" in o and o.get("op") in ("set", "flip", "rotate"):  # 伏せた紙に書いた値（封をした投票）も伏せる
-                    o["value"] = "（見えない）"
-        elif player and isinstance(obj, str) and obj in s.defn.parts and o.get("by") != player:
-            # 区別しない部品（資源など）：移る元か先の表面が見えなければ種類を伏せる（取った札は当事者だけが知る）
-            from .view import _allowed, visibility
-            ends = [_area_of(s.defn, state, x) for x in (o.get("from"), o.get("to")) if x]
-            if ends and not any(a in s.defn.areas and _allowed(visibility(s.defn, a)["face"], player, s.defn.areas[a].get("owner"))
-                                for a in ends):
-                o["obj"] = "（見えない部品）"
-        if o.get("op") == "roll" and obj in state["states"]:
-            o["result"] = state["states"][obj]
-        out.append(o)
-    return out
+from .redact import visible_log, visible_ops as _visible_ops  # noqa: E402（伏せる処理は redact に 1 か所）
 
 
 def main(argv=None):
@@ -190,6 +157,18 @@ def main(argv=None):
     c.add_argument("--by", required=True)
     c.add_argument("--param", help="省くと全部の引数")
     c.add_argument("--arg", action="append", default=[], help="先に決めた引数（char=C01 など）")
+    c = sub.add_parser("schema", help="ゲーム定義の形式（JSON Schema）を書き出す。エディタの補完・エージェントの読み物（正本は src/bgskills/schema.py）")
+    c = sub.add_parser("quiz", help="ルールの理解の小テストを作る（局面ごとに「行えるか」。正解はエンジンの判定。answers.yaml は別）")
+    c.add_argument("definition")
+    c.add_argument("--players", type=int, required=True)
+    c.add_argument("--n", type=int, default=20)
+    c.add_argument("--seed", type=int, default=0)
+    c.add_argument("--out", required=True)
+    c = sub.add_parser("quiz-grade", help="小テストを採点する（answers.yaml と、{問の id: yes|no} の答え）")
+    c.add_argument("answers")
+    c.add_argument("responses")
+    c = sub.add_parser("playstats", help="対局の物差し：コマンドの数・受け付けなかった数（拒否）・手番あたり（usage.jsonl と記録から）")
+    c.add_argument("session")
     c = sub.add_parser("complexity", help="ルールの複雑さの目安（ルール・アクション・条件・式の大きさ・機械で確かめないルール）")
     c.add_argument("definition")
     c.add_argument("--players", type=int)
@@ -344,15 +323,7 @@ def main(argv=None):
             _out(v)
         elif a.cmd == "log":
             s = Session(a.session)
-            if not a.player:
-                _out(s.log())
-            else:  # 伏せるかは、その操作の直後の局面の見え方で決める（後で公開された札から、昔の手札を明かさない）
-                from .session import apply_op, initial_state
-                st, out = initial_state(s.defn, s.meta.get("start") == "box"), []
-                for i, o in enumerate(s.log(), 1):
-                    st = apply_op(s.defn, st, o, s.meta["seed"], i)
-                    out += _visible_ops(s, st, [o], a.player)
-                _out(out)
+            _out(visible_log(s, a.player))
         elif a.cmd == "near":
             from .query import neighbors
             s = Session(a.session)
@@ -392,6 +363,18 @@ def main(argv=None):
             _out({"ok": True, **({"warnings": s.last_warnings} if s.last_warnings else {}),
                   "stack": [{"n": e["n"], "action": e["action"], "by": e["by"]} for e in st.get("stack") or []],
                   **({"resolved": st["stack_done"][-1]} if a.cmd == "resolve" or not st.get("stack_passes") and st.get("stack_done") else {})})
+        elif a.cmd == "schema":
+            from .schema import json_schema
+            print(json.dumps(json_schema(), ensure_ascii=False, indent=1))
+        elif a.cmd == "quiz":
+            from .tools import quiz
+            _out(quiz(a.definition, a.players, a.n, a.seed, a.out))
+        elif a.cmd == "quiz-grade":
+            from .tools import quiz_grade
+            _out(quiz_grade(a.answers, a.responses))
+        elif a.cmd == "playstats":
+            from .tools import playstats
+            _out(playstats(Session(a.session)))
         elif a.cmd == "complexity":
             from .tools import complexity
             _out(complexity(load(a.definition, a.players)))
@@ -427,8 +410,26 @@ def main(argv=None):
                 sys.stderr.write(f"warning: {w}\n")
     except (ValueError, KeyError, FileNotFoundError, yaml.YAMLError) as e:  # DefinitionError・OpError・式の誤り・JSON の誤りも ValueError
         sys.stderr.write(f"error: {e}\n")
+        _usage(a, str(e))
         return 2
+    _usage(a, None)
     return 0
+
+
+def _usage(a, error):
+    """対局で使ったコマンドと、受け付けなかったもの（拒否）を usage.jsonl に残す（目的の物差し：bg playstats）。
+    局面の記録（log.jsonl）とは別。記録の再生には使わない。"""
+    d = getattr(a, "session", None)
+    if not d or a.cmd in ("new", "playstats") or not (Path(d) / "session.yaml").exists():
+        return
+    try:
+        n = sum(1 for _ in (Path(d) / "log.jsonl").open(encoding="utf-8"))
+        who = getattr(a, "by", None) or getattr(a, "player", None)
+        rec = {"cmd": a.cmd, **({"who": who} if who else {}), "ops": n, **({"error": error[:200]} if error else {})}
+        with (Path(d) / "usage.jsonl").open("a", encoding="utf-8") as f:
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    except OSError:
+        pass
 
 
 if __name__ == "__main__":
