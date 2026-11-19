@@ -348,6 +348,9 @@ def summary(d: Definition, f: dict | None, viewer: str | None) -> dict | None:
         return None
     st = _stage(d, f)
     ph = _phases(d, st)
+    if not f.get("stage"):  # 進行が終わった（巡の上限を超えた・最後の段階の後）。stage: null から推させない
+        return {"stage": None, "ended": True, "turn_no": f.get("turn_no"), **({"cycle": f.get("cycle")} if f.get("cycle") else {}),
+                "available": {}}
     return {"stage": f["stage"], "stage_name": st.get("name"), **({"cycle": f.get("cycle", 1)} if _flow(d).get("cycle") else {}),
             "turn_no": f["turn_no"],
             "turn_in_stage": f["turn_in_stage"] + 1 if st.get("turn") else None, "active": f["active"],
