@@ -32,7 +32,7 @@ ObjectStates に 1 つの Bag。中にエリアごとの Deck・Card・HandTrigg
 
 ## Validation Rules
 
-実機で確かめていない点がある（山の上下など）。【要確認：TTS の実機での山の上下】
+実機で確かめていない点がある（山の上下など）。山の上は今の書き出しの順のまま。実機で逆と分かったら直す（推奨で決めた。RUL-018）
 
 ## Compatibility
 
