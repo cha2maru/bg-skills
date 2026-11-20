@@ -273,14 +273,18 @@ def main(argv=None):
             if a.only:
                 want = [w for w in a.only.split(",") if w in s.defn.areas]
                 parts = {w for w in a.only.split(",") if w not in s.defn.areas}  # 局面の部分（talk・flow など）
-                bad = parts - set(v) - {"catalog", "offers_for_me", "talk_omitted", "talk", "flow", "metrics", "progress", "stack", "stack_waiting", "stack_done"}
+                bad = parts - set(v) - {"catalog", "offers_for_me", "talk_omitted", "talk", "flow", "metrics", "progress", "stack", "stack_waiting", "stack_done", "empty", "standings"}
                 if bad:
                     raise OpError(f"--only の {', '.join(sorted(bad))} はエリアでも局面の部分でもない（部分：{', '.join(k for k in v if k not in ('for', 'game', 'version'))}）")
                 under = lambda x: any(x == w or s.defn.parent.get(x) == w or s.defn.parent.get(s.defn.parent.get(x) or "") == w for w in want)
-                v["areas"] = {k: e for k, e in v["areas"].items() if under(k)}
+                if want:  # エリアを指定しなければ、ここでは絞らない（空のエリアの一覧などを作れるように。最後に areas ごと外す）
+                    v["areas"] = {k: e for k, e in v["areas"].items() if under(k)}
             if a.compact:  # 空で子もリンクもないエリアを省き、同じ種類・状態の部品をまとめる
+                empty = sorted(k for k, e in v["areas"].items() if e.get("shown") == [] and not e.get("children"))
                 v["areas"] = {k: {**e, **({"shown": _group(e["shown"])} if isinstance(e.get("shown"), list) else {})}
                               for k, e in v["areas"].items() if e.get("shown") not in ([], None) or e.get("children")}
+                if empty:
+                    v["empty"] = empty  # 省いた空のエリア（空だと読めるように。見落としと区別する）
                 for e in v["areas"].values():
                     e.pop("children", None)
                 catalog = {}  # 表や一覧の属性（ワザの全文など）は、名前ごとに 1 回だけ catalog に出す

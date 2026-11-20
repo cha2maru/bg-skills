@@ -590,7 +590,7 @@ def quiz(path, players: int, n: int = 20, seed: int = 0, out=None) -> dict:
     rnd = random.Random(seed)
     qs, answers = [], {}
     g = 0
-    while len(qs) < n and g < n * 10:
+    while len(qs) < n and g < n * 12:
         g += 1
         s = Session.create(out / f"_base{g}", path, players, {}, seed * 1000 + g, strict=True)
         acts = s.defn.data.get("actions") or []
@@ -598,16 +598,23 @@ def quiz(path, players: int, n: int = 20, seed: int = 0, out=None) -> dict:
         for _ in range(rnd.randint(3, 120)):  # でたらめに進める（selfplay と同じ 1 歩）
             if random_step(s, rnd, staged):
                 break
-        if s.state()["result"] is not None:
-            continue
-        # 問い：プレイヤーのアクションと引数（条件を満たす候補と満たさない候補を半々に）
+        fl = s.state().get("flow") or {}
+        if s.state()["result"] is not None or (s.defn.data.get("flow") and not fl.get("stage")):
+            continue  # 終わった局面・進行が終わった局面は問いにしない（答えがみな「行えない」になる）
+        # 問い：プレイヤーのアクションと引数（行える問いと行えない問いを半々に）
         pa = [a for a in acts if "keeper" not in (a.get("by") or [])]
         if not pa:
             break
-        a = rnd.choice(pa)
-        act_now = (s.state().get("flow") or {}).get("active")
+        okish = sum(v["answer"] == "yes" for v in answers.values()) < n / 2 and rnd.random() < 0.7
+        act_now = fl.get("active")
         who = act_now if act_now and rnd.random() < 0.7 else rnd.choice(list(s.defn.players))  # 手番の人に寄せる（易しい問いを減らす）
-        args, okish = {}, rnd.random() < 0.5
+        if okish and fl:  # 行えそうな問い：進行の上で今行えるアクションから選ぶ
+            from .flow import available
+            av = available(s.defn, fl, who)
+            ids = {i for k in ("main", "free", "reaction", "stage") for i in av.get(k, [])}
+            pa = [a for a in pa if a["id"] in ids] or pa
+        a = rnd.choice(pa)
+        args = {}
         try:
             for prm in a.get("params") or []:
                 if prm.get("free") or prm.get("pick") == "first":
@@ -620,9 +627,6 @@ def quiz(path, players: int, n: int = 20, seed: int = 0, out=None) -> dict:
         except (OpError, ValueError):
             continue
         qid = f"q{len(qs) + 1:02d}"
-        qdir = out / qid
-        shutil.copytree(s.dir, qdir)
-        (qdir / "usage.jsonl").unlink(missing_ok=True)
         trial = out / f"_trial_{qid}"
         shutil.copytree(s.dir, trial)
         try:
@@ -631,6 +635,13 @@ def quiz(path, players: int, n: int = 20, seed: int = 0, out=None) -> dict:
         except OpError as e:
             truth, why = False, str(e).replace("厳格モードで受け付けない：", "")
         shutil.rmtree(trial)
+        yes = sum(v["answer"] == "yes" for v in answers.values())
+        if (truth and yes >= (n + 1) // 2) or (not truth and len(answers) - yes >= n // 2 + (n % 2 == 0 and 0)):
+            if g < n * 8:  # 片方に偏ったら捨てて作り直す（作り直しが尽きたら偏りを受け入れる）
+                continue
+        qdir = out / qid
+        shutil.copytree(s.dir, qdir)
+        (qdir / "usage.jsonl").unlink(missing_ok=True)
         qs.append({"id": qid, "session": str(qdir), "as": who, "action": a["id"], "args": args,
                    "question": f"{who} は今、{a.get('name', a['id'])}（{a['id']}）を {args or '引数なし'} で行えるか（yes/no と理由）"})
         answers[qid] = {"answer": "yes" if truth else "no", "why": why}

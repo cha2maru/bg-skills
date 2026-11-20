@@ -169,3 +169,21 @@ def test_quiz_findings_stage_binding_and_flow_end(tmp_path):
     (tmp_path / "a.yaml").write_text("q01: {answer: 'yes', why: ''}\nq02: {answer: 'no', why: x}\n", encoding="utf-8")
     (tmp_path / "r.yaml").write_text("q01: yes\nq02: no\n", encoding="utf-8")
     assert quiz_grade(tmp_path / "a.yaml", tmp_path / "r.yaml")["accuracy"] == 1.0
+
+
+def test_blocked_actions_and_empty_areas(tmp_path, capsys):
+    """エージェントの指摘（RUL-016 の測り直し）：本人の見え方に、進行の上では行えるが条件で今は行えないアクションを理由つきで、
+    --compact に空のエリアの一覧を出す。"""
+    from pathlib import Path
+    import yaml
+    from bgskills.cli import main
+    ex = Path(__file__).parent.parent / "examples" / "rune-clash.yaml"
+    s = Session.create(tmp_path / "r", ex, 2, {}, 1)
+    s.act("setup", "keeper"); s.apply({"op": "advance", "to": "stage", "by": "keeper"}); s.act("draw", "P1")
+    f = view(s.defn, s.state(), "P1")["flow"]
+    assert f["blocked"] == {"cast-dispel": ["ルーンが足りない"], "cast-ward": ["ルーンが足りない"]}
+    assert "blocked" not in view(s.defn, s.state(), "P2")["flow"] or "cast-bolt" not in view(s.defn, s.state(), "P2")["flow"]["blocked"]
+    capsys.readouterr()
+    main(["show", str(s.dir), "--as", "P1", "--compact", "--only", "empty"])
+    v = yaml.safe_load(capsys.readouterr().out)
+    assert "life-P1" in v["empty"] and "pool-P1" not in v["empty"]  # 引いてルーンが 1 つある

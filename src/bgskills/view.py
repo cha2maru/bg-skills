@@ -202,6 +202,17 @@ def view(d: Definition, state: dict, player: str | None = None, meaning: bool = 
     if state.get("flow"):  # 進行の構造（SPC-051）
         from .flow import end_signals, summary
         out["flow"] = summary(d, state["flow"], player)
+        if player in d.players and out["flow"].get("available"):  # 本人にだけ：進行の上で行えるが、アクションの条件で今は行えないもの（理由つき）
+            from .query import check_action
+            acts = {a["id"]: a for a in d.data.get("actions") or []}
+            blocked = {}
+            for ids in out["flow"]["available"].values():
+                for i in ids:
+                    why = check_action(d, state, acts[i], {"actor": player, "player": player}) if i in acts else []
+                    if why:
+                        blocked[i] = why
+            if blocked:
+                out["flow"]["blocked"] = blocked  # 引数の条件は出さない（隠れた情報を読むことがある。L14）
         if player is None and state["result"] is None:  # 終了の検出はキーパーにだけ（隠れた値を使うことがある）
             for key, name in (("end_when", "end_signals"), ("signals", "signals")):
                 sig = end_signals(d, state, key)
