@@ -841,15 +841,16 @@ function fitTable() {
   const t = $("#table");
   if (ZOOM !== "fit") { t.style.zoom = ZOOM; return; }
   t.style.zoom = 1;
+  if (t.querySelector(".rectwrap.plain, .rectwrap")) return; // 地図のある卓は、地図だけを画面の高さに合わせる（二重に縮めない）
   const room = innerHeight - t.getBoundingClientRect().top - 16;
   const z = Math.max(0.6, Math.min(1, room / t.scrollHeight));
   t.style.zoom = z;
 }
 // 地図（rect・poly）は画面の高さに収める（縦横比を保って幅を縮める。表示だけ）
 function fitMaps() {
-  const maxH = innerHeight - 140;
   for (const w of document.querySelectorAll(".rectwrap.plain")) {
     w.style.width = "";
+    const maxH = Math.max(420, innerHeight - w.getBoundingClientRect().top - 16); // 地図の上端から画面の下まで
     const r = w.offsetWidth / w.offsetHeight;
     if (w.offsetHeight > maxH && r > 0) w.style.width = maxH * r + "px";
   }

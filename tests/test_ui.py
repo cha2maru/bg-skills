@@ -493,3 +493,28 @@ def test_stacked_items_drawn_overlapped(tmp_path, browser):
     assert page.locator(".stackwrap").count() == 0 and page.locator("[data-obj=P1-hibana-1] .stack").count() == 1
     page.close()
     httpd.shutdown()
+
+
+def test_map_table_not_double_shrunk(tmp_path, browser):
+    """地図のある卓（多角形の州）：「画面に合わせる」でも卓全体は縮めず（zoom 1）、地図だけを地図の上端から画面の下までに収める。
+    以前は二重に縮めて州の名前と駒が読めなくなった。"""
+    import yaml
+    cells = [{"id": f"c{i}", "name": f"州{i}", "kind": "cell", "poly": [[i / 6, 0], [(i + 1) / 6, 0], [(i + 1) / 6, 1], [i / 6, 1]],
+              "color": "#cde"} for i in range(6)]
+    d = {"format": "bg-def/0.1", "game": {"id": "map", "name": "地図", "version": 1, "players": {"min": 1, "max": 1}},
+         "players": [{"id": "P1"}], "kinds": {"cell": {"base": "area"}},
+         "areas": [{"id": "board", "name": "地図", "aspect": "4 / 3", "areas": cells}] +
+                  [{"id": f"r{i}", "name": f"置き場{i}"} for i in range(12)],
+         "objects": [], "rules": [{"id": "R1", "text": "地図"}]}
+    path = tmp_path / "map.yaml"
+    path.write_text(yaml.safe_dump(d, allow_unicode=True), encoding="utf-8")
+    s = Session.create(tmp_path / "s", path, 1, {}, 1)
+    httpd, url = _serve(s.dir)
+    page = browser.new_page(viewport={"width": 1440, "height": 900})
+    page.goto(url)
+    page.wait_for_timeout(1500)
+    assert page.evaluate("document.querySelector('#table').style.zoom") in ("1", "")
+    box = page.locator(".rectwrap").bounding_box()
+    assert box["y"] + box["height"] <= 900 + 1
+    page.close()
+    httpd.shutdown()
