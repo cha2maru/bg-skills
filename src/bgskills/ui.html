@@ -187,6 +187,50 @@ input.small{width:100%;border:1px solid var(--area-line);border-radius:4px;paddi
 .area.rectcell .card.round{width:auto;height:88%;min-height:0;aspect-ratio:1;flex:none}
 .card.round.img>div:first-child{display:none}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+/* 見栄えの調整（RUL-019）：卓を広く・カードは決まった大きさ・トークンは小さく・席を一画面に */
+main{grid-template-columns:minmax(0,1fr) 300px}
+#inspect{position:fixed;right:16px;top:64px;width:300px;max-height:calc(100vh - 90px);overflow:auto;z-index:30;box-shadow:0 8px 28px rgba(0,0,0,.2)}
+body:not(.has-sel) #inspect{display:none}
+body.hide-side main,body.hide-inspect.hide-side main{grid-template-columns:minmax(0,1fr)}
+body.hide-inspect main{grid-template-columns:minmax(0,1fr) 300px}
+#inspect .close{position:absolute;right:8px;top:6px}
+.card{width:64px;height:90px;min-height:0;overflow:hidden;font-size:11px;line-height:1.25;padding:3px 4px}
+.card>div:first-child{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-weight:600}
+.card.side{width:90px;height:64px;min-height:0}
+.card.has-stack{height:auto;min-height:90px;overflow:visible}
+.card .stack .card{width:auto;height:auto;min-height:0;font-size:10px;padding:1px 3px;font-weight:400}
+.card .stack .card>div:first-child{font-weight:400}
+.card .written{font-size:10px;max-height:4em;overflow:hidden}
+body:not(.show-attrs) .card .badge.at{display:none}
+.card.img{width:64px;height:90px;min-height:0}
+.card.img.side{width:90px;height:64px}
+.card.round{width:30px;height:30px;min-height:0;font-size:9px;padding:0;display:flex;align-items:center;justify-content:center;text-align:center;line-height:1}
+.card.round>div:first-child{-webkit-line-clamp:1;font-weight:600}
+.card.round .cid,.card.round .badges,.card.round .orient,.card.round .written{display:none}
+.chip{font-size:11px;padding:0 6px;line-height:1.6}
+.chip .count{font-size:11px}
+.items{min-height:24px;gap:4px}
+.items.fan{flex-wrap:nowrap;overflow-x:auto;padding-bottom:6px}
+.items.fan>.card+.card{margin-left:-44px}
+.items.fan>.card{flex:none;box-shadow:-2px 0 4px rgba(0,0,0,.14)}
+.items.fan>.card:hover{position:relative;z-index:3;transform:translateY(-6px)}
+.seat{flex-direction:row;flex-wrap:wrap;align-items:flex-start}
+.seat>.label{flex-basis:100%}
+.seat>.area{flex:1 1 auto}
+.area{padding:4px 6px 6px}
+.area>.head{font-size:12px}
+.area>.head b{font-size:12px}
+header{padding:6px 12px;gap:6px 12px}
+header label{font-size:12px}
+.tabs{flex-wrap:wrap}
+.tabs button{white-space:nowrap;padding:1px 6px;font-size:12px}
+.card.has-stack{width:auto;min-width:64px;max-width:132px}
+.card .stack .chip,.card .stack .card{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.card .stack .chip{font-size:10px;padding:0 4px}
+.area.hexcell .card,.area.hexvertex .card,.area.hexedge .card{height:auto}  /* 盤の中のカードは、大きさを盤のマスに合わせる */
+.area.hexcell .card{min-height:30px}
+.seat .kids,.seat.top .kids{flex-direction:row;flex-wrap:wrap;align-items:flex-start}  /* 席の中の子エリア（手札・火など）も横に並べる */
+.seat .kids>.area{flex:1 1 140px}
 </style>
 </head>
 <body>
@@ -197,7 +241,7 @@ input.small{width:100%;border:1px solid var(--area-line);border-radius:4px;paddi
   <label>理由のルール <select id="rule"><option value="">（なし）</option></select></label>
   <label><input type="checkbox" id="showlinks" checked> エリアのつながり</label>
   <details id="showmenu"><summary>表示</summary><div id="showopts"></div></details>
-  <label>卓の大きさ <select id="zoom"><option value="0.6">60%</option><option value="0.8">80%</option><option value="1" selected>100%</option><option value="1.25">125%</option><option value="1.5">150%</option></select></label>
+  <label>卓の大きさ <select id="zoom"><option value="fit" selected>画面に合わせる</option><option value="0.6">60%</option><option value="0.8">80%</option><option value="1">100%</option><option value="1.25">125%</option><option value="1.5">150%</option></select></label>
   <button type="button" id="tog-inspect" aria-pressed="true" title="「調べる」の欄を出す・たたむ（卓を広くする）">調べる欄</button>
   <button type="button" id="tog-side" aria-pressed="true" title="ルール・記録の欄を出す・たたむ（卓を広くする）">ルール欄</button>
 </header>
@@ -286,8 +330,8 @@ function itemEl(it, container) {
   }
   const disp = it.display || {rotate: 0, face: "up"};          // 状態の表示方法（SPC-038）
   const down = disp.face === "down", side = disp.rotate % 180 === 90;
-  const cls = ["card", down && "down", side && "side", it.image && "img", it.shape === "round" && "round", SEL && SEL.id === it.id && "sel"].filter(Boolean).join(" ");
-  const card = h("div", {class: cls, "data-obj": it.id, "data-in": container, title: it.meaning || "",
+  const cls = ["card", down && "down", side && "side", it.image && "img", it.shape === "round" && "round", it.stacked && it.stacked.length && "has-stack", SEL && SEL.id === it.id && "sel"].filter(Boolean).join(" ");
+  const card = h("div", {class: cls, "data-obj": it.id, "data-in": container, title: [it.title, ...Object.entries(it.attributes || {}).filter(([, v]) => typeof v !== "object").map(([k, v]) => `${k}: ${v}`), it.meaning].filter(Boolean).join("\n"),
       onpointerdown: e => grab(e, {obj: it.id, from: container}, () => select({type: "item", id: it.id, container, item: it}))},
     h("div", {}, it.title || it.kind || ""), h("div", {class: "cid"}, it.id),
     Object.entries((DEF.kinds[it.kind] || {}).states || {}).filter(([f, t]) => (typeof t === "string" || ((DEF.kinds[it.kind] || {}).show_state || []).includes(f)) && valueOf(it.state, f))
@@ -369,7 +413,12 @@ function areaEl(a) {
   }
   const items = h("div", {class: "items"});
   if (!v) items.append(h("span", {class: "empty"}, "（この立場からは存在も見えない）"));
-  else if (Array.isArray(v.shown)) { v.shown.forEach(it => items.append(itemEl(it, a.id))); if (!v.shown.length) items.append(h("span", {class: "empty"}, "空")); }
+  else if (Array.isArray(v.shown)) {
+    v.shown.forEach(it => items.append(itemEl(it, a.id)));
+    if (!v.shown.length) items.append(h("span", {class: "empty"}, "空"));
+    const cards = v.shown.filter(it => !("count" in it) && it.shape !== "round" && !(it.stacked && it.stacked.length)).length;
+    if (cards > 7 || (a.ordered && cards > 5)) items.classList.add("fan"); // 枚数の多い置き場（山札など）は重ねて並べる（表示だけ）
+  }
   else if (v.shown && "count" in v.shown) backs(items, v.shown.count, a.ordered, Object.values(v.hidden || {})[0]);
   else if (v.shown && "exists" in v.shown) items.append(h("span", {class: "count"}, v.shown.exists ? "何かある" : "空"));
   box.append(items);
@@ -558,6 +607,7 @@ async function runAction(a, by, args) {
 }
 
 function select(s) { SEL = s; render(); }
+addEventListener("keydown", e => { if (e.key === "Escape" && SEL) { SEL = null; render(); } });
 
 // 回す・返すは、種類が定義する状態の表示方法（show）からライブラリが値を選ぶ（タップは 90 度回すこと）
 function tap(id) { op({op: "rotate", obj: id}); }
@@ -573,7 +623,7 @@ addEventListener("keydown", e => {
 });
 
 function inspect() {
-  const p = $("#inspect"); p.replaceChildren(h("h2", {}, "調べる"));
+  const p = $("#inspect"); p.replaceChildren(h("h2", {}, "調べる"), h("button", {class: "close", title: "閉じる（Esc）", onclick: () => { SEL = null; render(); }}, "×"));
   if (!SEL) return p.append(h("p", {class: "empty"}, "カードかエリアをクリックする"));
   if (SEL.type === "area") {
     const a = SEL.area, v = VIEW.areas[a.id] || {};
@@ -753,14 +803,34 @@ function drawLinks() {
   t.append(svg);
 }
 
+// 卓の大きさ「画面に合わせる」：卓が画面の高さに収まるよう縮める（60% より小さくはしない。表示だけ）
+let ZOOM = "fit";
+function fitTable() {
+  const t = $("#table");
+  if (ZOOM !== "fit") { t.style.zoom = ZOOM; return; }
+  t.style.zoom = 1;
+  const room = innerHeight - t.getBoundingClientRect().top - 16;
+  const z = Math.max(0.6, Math.min(1, room / t.scrollHeight));
+  t.style.zoom = z;
+}
+// 地図（rect・poly）は画面の高さに収める（縦横比を保って幅を縮める。表示だけ）
+function fitMaps() {
+  const maxH = innerHeight - 140;
+  for (const w of document.querySelectorAll(".rectwrap.plain")) {
+    w.style.width = "";
+    const r = w.offsetWidth / w.offsetHeight;
+    if (w.offsetHeight > maxH && r > 0) w.style.width = maxH * r + "px";
+  }
+}
 function render() {
   $("#table").replaceChildren(...(DEF.table ? tableEl() : DEF.areas.map(areaEl)).filter(Boolean));
-  requestAnimationFrame(drawLinks);
+  requestAnimationFrame(() => { fitMaps(); fitTable(); drawLinks(); });
   if (SEL && SEL.type === "item") { // 動いた後も同じ部品を指す
     const find = (items, c) => { for (const it of items || []) { if (it.id === SEL.id) return [it, c]; const f = find(it.stacked, it.id); if (f) return f; } };
     let hit; for (const [aid, v] of Object.entries(VIEW.areas)) if (Array.isArray(v.shown) && (hit = find(v.shown, aid))) break;
     if (hit) { SEL.item = hit[0]; SEL.container = hit[1]; } else SEL = null;
   }
+  document.body.classList.toggle("has-sel", !!SEL); // 調べる欄は、選んだときだけ卓の上に重ねて出す
   inspect(); side(); actionsEl();
 }
 
@@ -775,7 +845,7 @@ async function boot() {
   $("#rule").append(...DEF.rules.map(r => h("option", {value: r.id}, r.id)));
   $("#as").onchange = () => refresh(true);
   $("#showlinks").onchange = drawLinks;
-  const OPTS = [["ids", "部品の ID"], ["states", "状態"], ["vis", "公開範囲"], ["orient", "縦横の印"], ["meta", "エリアの ID・持ち主"], ["hidden", "見えない理由"], ["help", "操作の説明"]];
+  const OPTS = [["ids", "部品の ID"], ["attrs", "カードの属性"], ["states", "状態"], ["vis", "公開範囲"], ["orient", "縦横の印"], ["meta", "エリアの ID・持ち主"], ["hidden", "見えない理由"], ["help", "操作の説明"]];
   let on = []; try { on = JSON.parse(localStorage.getItem("bg-show") || "[]"); } catch (e) {}
   for (const [k, label] of OPTS) {
     const cb = h("input", {type: "checkbox", id: "show-" + k});
@@ -789,13 +859,13 @@ async function boot() {
   const saveUi = () => { try { localStorage.setItem("bg-ui", JSON.stringify(ui)); } catch (e) {} };
   const applyUi = () => {
     for (const k of ["inspect", "side"]) { document.body.classList.toggle("hide-" + k, !!ui["hide_" + k]); $("#tog-" + k).setAttribute("aria-pressed", String(!ui["hide_" + k])); }
-    $("#zoom").value = String(ui.zoom || 1); $("#table").style.zoom = ui.zoom || 1; requestAnimationFrame(() => { render(); });
+    ZOOM = ui.zoom || "fit"; $("#zoom").value = String(ZOOM); requestAnimationFrame(() => { render(); });
   };
   for (const k of ["inspect", "side"]) $("#tog-" + k).onclick = () => { ui["hide_" + k] = !ui["hide_" + k]; saveUi(); applyUi(); };
-  $("#zoom").onchange = () => { ui.zoom = parseFloat($("#zoom").value); saveUi(); applyUi(); };
+  $("#zoom").onchange = () => { const v = $("#zoom").value; ui.zoom = v === "fit" ? "fit" : parseFloat(v); saveUi(); applyUi(); };
   document.body.classList.toggle("hide-inspect", !!ui.hide_inspect); document.body.classList.toggle("hide-side", !!ui.hide_side);
-  $("#table").style.zoom = ui.zoom || 1; $("#zoom").value = String(ui.zoom || 1);
-  addEventListener("resize", () => requestAnimationFrame(drawLinks));
+  ZOOM = ui.zoom || "fit"; $("#zoom").value = String(ZOOM);
+  addEventListener("resize", () => requestAnimationFrame(() => { fitMaps(); fitTable(); drawLinks(); }));
   for (const t of ["rules", "log", "metrics", "talk", "prog"]) $("#t-" + t).onclick = () => { TAB = t; side(); };
   await refresh(true);
   setInterval(() => refresh(false).catch(e => toast(e.message)), 1500); // エージェントの操作を拾う

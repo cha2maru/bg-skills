@@ -202,6 +202,9 @@ def view(d: Definition, state: dict, player: str | None = None, meaning: bool = 
     if state.get("flow"):  # 進行の構造（SPC-051）
         from .flow import end_signals, summary
         out["flow"] = summary(d, state["flow"], player)
+        if state.get("result") is not None:  # 終わった対局：進行の欄にも結果を出す（--only flow で読めるように）
+            r = state["result"]
+            out["flow"].update(ended=True, available={}, result=r.get("text") or r.get("results"))
         if player in d.players and out["flow"].get("available"):  # 本人にだけ：進行の上で行えるが、アクションの条件で今は行えないもの（理由つき）
             from .query import check_action
             acts = {a["id"]: a for a in d.data.get("actions") or []}

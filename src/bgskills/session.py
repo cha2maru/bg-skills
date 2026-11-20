@@ -721,6 +721,8 @@ class Session:
             fcntl.flock(f, fcntl.LOCK_EX)
             log = self.log()
             st, seq, done = self._replay(log), len(log), []
+            if st.get("result") is not None:  # 終わった対局では、進行の理由より先に「終わっている」と返す
+                raise OpError("対局は終了している（結果は bg show の result・flow.result）")
             for prm in a.get("params") or []:  # 区別しないコマなど、省いたら条件を満たす最初の候補（pick: first）
                 if prm["name"] not in args and prm.get("pick") == "first":
                     ok = [c["id"] for c in candidates(self.defn, st, action_id, actor, prm["name"], args) if not c["problems"]]

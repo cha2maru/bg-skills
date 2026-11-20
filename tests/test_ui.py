@@ -356,7 +356,7 @@ def test_many_seats_and_wide_table(tmp_path, browser):
     page.click("#tog-side")
     page.wait_for_timeout(300)
     assert not page.locator("#inspect").is_visible() and not page.locator("#sidepanel").is_visible()
-    assert page.locator("#table").bounding_box()["width"] > w0 + 500  # 卓が広くなる
+    assert page.locator("#table").bounding_box()["width"] > w0 + 250  # 卓が広くなる（ルールの欄 300px のぶん。調べる欄は選んだときだけ重ねて出す）
     page.select_option("#zoom", "0.6")
     page.wait_for_timeout(300)
     assert page.evaluate("document.querySelector('#table').style.zoom") == "0.6"
@@ -441,5 +441,30 @@ def test_stack_bar_pass_button(tmp_path, browser):
     page.click("#stack button:has-text('見送る')")
     page.wait_for_timeout(600)
     assert s.state()["stack"] == [] and errors == []
+    page.close()
+    httpd.shutdown()
+
+
+def test_layout_defaults_fixed_cards_fit_and_overlay_inspect(tmp_path, browser):
+    """見栄え（RUL-019）：カードは決まった大きさ、卓の大きさは「画面に合わせる」が既定、調べる欄は選んだときだけ重ねて出す、
+    枚数の多い置き場は重ねて並べる、空のエリアは --compact に出る（別のテスト）。"""
+    s = Session.create(tmp_path / "r", EX / "rune-clash.yaml", 2, {}, 3)
+    s.act("setup", "keeper")
+    httpd, url = _serve(s.dir)
+    page = browser.new_page(viewport={"width": 1440, "height": 900})
+    page.goto(url)
+    page.wait_for_timeout(1500)
+    assert page.locator("#zoom").input_value() == "fit"
+    assert not page.locator("#inspect").is_visible()
+    box = page.locator("[data-area=hand-P1] .card").first.bounding_box()
+    z = float(page.evaluate("document.querySelector('#table').style.zoom") or 1)
+    assert abs(box["width"] / z - 64) < 2 and abs(box["height"] / z - 90) < 2
+    assert page.locator("[data-area=deck-P1] .items.fan").count() == 1  # 山札は重ねて並べる
+    page.locator("[data-area=hand-P1] .card").first.click()
+    page.wait_for_timeout(300)
+    assert page.locator("#inspect").is_visible()
+    page.keyboard.press("Escape")
+    page.wait_for_timeout(300)
+    assert not page.locator("#inspect").is_visible()
     page.close()
     httpd.shutdown()
