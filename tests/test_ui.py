@@ -468,3 +468,28 @@ def test_layout_defaults_fixed_cards_fit_and_overlay_inspect(tmp_path, browser):
     assert not page.locator("#inspect").is_visible()
     page.close()
     httpd.shutdown()
+
+
+def test_stacked_items_drawn_overlapped(tmp_path, browser):
+    """重なりの表現（RUL-020）：精霊獣に付けたエネルギーは本体の下にずらして重ね、ダメージカウンター（数える部品）は右肩に載せる。
+    「重なりを一覧で出す」に切り替えると、カードの中の一覧に戻る。重ねたカードも掴める。"""
+    s = Session.create(tmp_path / "d", EX / "beast-duel.yaml", 2, {}, 3, strict=False)
+    s.act("setup", "keeper")
+    s.apply({"op": "move", "obj": "P1-hibana-1", "to": "active-P1", "by": "keeper"})
+    for e in ("P1-fire-1", "P1-fire-2"):
+        s.apply({"op": "move", "obj": e, "to": "P1-hibana-1", "by": "keeper"})
+    s.apply({"op": "move", "obj": "counter-pool", "from": "supply", "to": "P1-hibana-1", "n": 3, "by": "keeper"})
+    httpd, url = _serve(s.dir)
+    page = browser.new_page(viewport={"width": 1440, "height": 900})
+    page.goto(url)
+    page.wait_for_timeout(1500)
+    wrap = page.locator(".stackwrap").filter(has=page.locator("[data-obj=P1-hibana-1]"))
+    assert wrap.locator(".under [data-obj]").count() == 2 and "×3" in wrap.locator(".tokens").inner_text()
+    host, under = page.locator("[data-obj=P1-hibana-1]").bounding_box(), page.locator("[data-obj=P1-fire-2]").bounding_box()
+    assert under["y"] > host["y"]  # 下へずらしてのぞく
+    page.click("#showmenu summary")
+    page.check("#show-stacklist")
+    page.wait_for_timeout(300)
+    assert page.locator(".stackwrap").count() == 0 and page.locator("[data-obj=P1-hibana-1] .stack").count() == 1
+    page.close()
+    httpd.shutdown()

@@ -231,6 +231,17 @@ header label{font-size:12px}
 .area.hexcell .card{min-height:30px}
 .seat .kids,.seat.top .kids{flex-direction:row;flex-wrap:wrap;align-items:flex-start}  /* 席の中の子エリア（手札・火など）も横に並べる */
 .seat .kids>.area{flex:1 1 140px}
+/* 重なった表現（RUL-020） */
+.stackwrap{position:relative;flex:none}
+.stackwrap>.card.host{position:absolute;left:0;top:0}
+.stackwrap>.under{position:absolute;left:0}
+.stackwrap>.under>.card,.stackwrap>.under>.stackwrap{box-shadow:0 1px 2px rgba(0,0,0,.18)}
+.stackwrap>.under>.card>div:first-child{position:absolute;left:4px;right:4px;bottom:1px;-webkit-line-clamp:1;font-size:10px}
+.stackwrap>.under>.card .badges,.stackwrap>.under>.card .written,.stackwrap>.under>.card .orient{display:none}
+.stackwrap>.tokens{position:absolute;right:-6px;top:14px;display:flex;flex-direction:column;align-items:flex-end;gap:2px;z-index:50}
+.stackwrap>.tokens>.chip{font-size:10px;padding:0 5px;box-shadow:0 1px 3px rgba(0,0,0,.25);white-space:nowrap;max-width:none}
+.stackwrap>.tokens>.card.round{width:22px;height:22px}
+.items.fan>.stackwrap+.card,.items.fan>.card+.stackwrap{margin-left:-20px}
 </style>
 </head>
 <body>
@@ -338,12 +349,33 @@ function itemEl(it, container) {
       .map(([f]) => { const v = it.state[f]; return h("div", {class: "written"}, String((v && typeof v === "object" && v.meaning) || valueOf(it.state, f))); }), // 書き込んだ値（命令の文）と、種類の show_state の項目はいつも出す
     h("div", {class: "badges"}, it.visible_to ? h("span", {class: "badge vis"}, "公開：" + it.visible_to) : null,
       Object.entries(it.attributes || {}).filter(([, v]) => typeof v !== "object").map(([k, v]) => h("span", {class: "badge at", title: k}, `${k}:${v}`)), stateBadges(it.state), it.attached ? h("span", {class: "badge st"}, `付き先:${it.attached.to}`) : null),
-    stackEl(it, it.id), h("span", {class: "orient", title: `回転 ${disp.rotate}°・${{up: "表", down: "裏", held: "手札"}[disp.face] || disp.face}`},
+    overlap(it) ? null : stackEl(it, it.id), h("span", {class: "orient", title: `回転 ${disp.rotate}°・${{up: "表", down: "裏", held: "手札"}[disp.face] || disp.face}`},
       `${side ? "横" : "縦"} ${ARROW[disp.rotate] || "↑"}`));
   if (it.image) card.style.backgroundImage = `url("/assets/${encodeURI(it.image)}")`;
   const pc = it.owner && (DEF.players.find(p => p.id === it.owner) || {}).color; // 持ち主の色（定義の players[].color）
   if (pc && !it.image) { card.style.borderColor = pc; card.style.boxShadow = `inset 0 0 0 2px ${pc}`; if (it.shape === "round") { card.style.background = pc; card.style.color = "#fff"; } }
-  return card;
+  return overlap(it) ? overlapEl(it, card, side) : card;
+}
+// 重なっている物を、重なった形で出す（RUL-020。表示だけ）：重ねたカードは本体の下に少しずつずらしてのぞかせ、
+// 数える部品・丸い駒は本体の右肩に載せる。「表示」の「重なりを一覧で出す」なら、これまでのカードの中の一覧
+const overlap = it => it.stacked && it.stacked.length && !document.body.classList.contains("show-stacklist");
+function overlapEl(it, card, side) {
+  const tokens = it.stacked.filter(x => "count" in x || x.shape === "round");
+  const unders = it.stacked.filter(x => !tokens.includes(x));
+  const STEP = 15, W = side ? 90 : 64, H = side ? 64 : 90;
+  const wrap = h("div", {class: "stackwrap", title: `${it.title || it.id} に重なっている：${it.stacked.length}`});
+  wrap.style.width = W + "px";
+  wrap.style.height = H + STEP * unders.length + "px";
+  unders.forEach((x, i) => { // 下にあるほど下へずらす（本体のすぐ下が上）
+    const el = itemEl(x, it.id);
+    const u = h("div", {class: "under"}, el);
+    u.style.top = STEP * (i + 1) + "px"; u.style.zIndex = String(unders.length - i);
+    wrap.append(u);
+  });
+  card.classList.add("host"); card.style.zIndex = String(unders.length + 1);
+  wrap.append(card);
+  if (tokens.length) wrap.append(h("div", {class: "tokens"}, tokens.map(x => itemEl(x, it.id))));
+  return wrap;
 }
 const ARROW = {0: "↑", 90: "→", 180: "↓", 270: "←"}; // カードの上が向く方向
 function stackEl(it, container) {
@@ -845,12 +877,12 @@ async function boot() {
   $("#rule").append(...DEF.rules.map(r => h("option", {value: r.id}, r.id)));
   $("#as").onchange = () => refresh(true);
   $("#showlinks").onchange = drawLinks;
-  const OPTS = [["ids", "部品の ID"], ["attrs", "カードの属性"], ["states", "状態"], ["vis", "公開範囲"], ["orient", "縦横の印"], ["meta", "エリアの ID・持ち主"], ["hidden", "見えない理由"], ["help", "操作の説明"]];
+  const OPTS = [["ids", "部品の ID"], ["attrs", "カードの属性"], ["stacklist", "重なりを一覧で出す"], ["states", "状態"], ["vis", "公開範囲"], ["orient", "縦横の印"], ["meta", "エリアの ID・持ち主"], ["hidden", "見えない理由"], ["help", "操作の説明"]];
   let on = []; try { on = JSON.parse(localStorage.getItem("bg-show") || "[]"); } catch (e) {}
   for (const [k, label] of OPTS) {
     const cb = h("input", {type: "checkbox", id: "show-" + k});
     cb.checked = on.includes(k); document.body.classList.toggle("show-" + k, cb.checked);
-    cb.onchange = () => { document.body.classList.toggle("show-" + k, cb.checked); try { localStorage.setItem("bg-show", JSON.stringify(OPTS.map(o => o[0]).filter(x => $("#show-" + x).checked))); } catch (e) {} requestAnimationFrame(drawLinks); };
+    cb.onchange = () => { document.body.classList.toggle("show-" + k, cb.checked); if (k === "stacklist") render(); try { localStorage.setItem("bg-show", JSON.stringify(OPTS.map(o => o[0]).filter(x => $("#show-" + x).checked))); } catch (e) {} requestAnimationFrame(drawLinks); };
     $("#showopts").append(h("label", {}, cb, " " + label));
   }
   $("#by").onchange = actionsEl;
