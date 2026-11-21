@@ -231,6 +231,72 @@ def _unknown_names(d, src: str) -> str | None:
 AUTHORITY = ["official", "author", "designer", "keeper"]  # 裁定の重み（上ほど強い。一次資料の明文が見つかれば、それが裁定より強い）
 
 
+def _texts(d: Definition):
+    """人が読む文のある場所（場所, 文）：ゲームの概要、部品・置き場・種類の名前と説明、アクション、ルール、用語の説明、裁定、進行の名前。"""
+    g = d.data.get("game") or {}
+    for k in ("name", "summary"):
+        if g.get(k):
+            yield f"game.{k}", str(g[k])
+    for kid, k in d.kinds.items():
+        for f in ("name", "text"):
+            if k.get(f):
+                yield f"kinds.{kid}.{f}", str(k[f])
+    for aid, a in d.areas.items():
+        for f in ("name", "text"):
+            if a.get(f):
+                yield f"areas.{aid}.{f}", str(a[f])
+    for pid, p in d.parts.items():
+        t = (p.get("attributes") or {}).get("title")
+        if isinstance(t, str):
+            yield f"objects.{pid}.title", t
+    for a in d.data.get("actions") or []:
+        for f in ("name", "when", "text"):
+            if a.get(f):
+                yield f"actions.{a['id']}.{f}", str(a[f])
+    for r in d.data.get("rules") or []:
+        yield f"rules.{r['id']}", str(r.get("text") or "")
+    for tid, t in d.terms.items():
+        if t.get("text"):
+            yield f"terms.{tid}.text", str(t["text"])
+    for r in d.data.get("rulings") or []:
+        for f in ("question", "decision", "reason"):
+            if r.get(f):
+                yield f"rulings.{r.get('id')}.{f}", str(r[f])
+    fl = d.data.get("flow") or {}
+    for st in fl.get("stages") or []:
+        if st.get("name"):
+            yield f"flow.stages.{st['id']}.name", str(st["name"])
+    for tid, t in (fl.get("turns") or {}).items():
+        for ph in t.get("phases") or []:
+            if ph.get("name"):
+                yield f"flow.turns.{tid}.{ph['id']}.name", str(ph["name"])
+    for key in ("end_when", "signals"):
+        for i, c in enumerate(fl.get(key) or []):
+            if c.get("text"):
+                yield f"flow.{key}[{i}].text", str(c["text"])
+
+
+def check_wording(d: Definition) -> list[dict]:
+    """用語の表記（RUL-029）：用語の avoid（使わない言葉）が人の読む文に出ていたら、言い換えの候補（用語の word）と場所を返す。
+    ほかの用語の言葉・初出の表記の中に含まれる部分（「切札」の「札」など）は数えない。誤りではなく知らせ（bg check の wording）。"""
+    words = sorted({str(x) for t in d.terms.values() for x in (t.get("word"), t.get("first")) if x}, key=len, reverse=True)
+    avoid = [(str(w), t.get("word") or tid) for tid, t in d.terms.items() for w in (t.get("avoid") or [])]
+    out = []
+    if not avoid:
+        return out
+    for where, text in _texts(d):
+        own = where.split(".")[1] if where.startswith("terms.") else None  # 用語の説明で、その用語が避ける言葉を挙げるのは数えない
+        masked = text
+        for w in words:  # 登録した用語の中の文字は数えない（「切札」が用語なら、その中の「札」は言い換えない）
+            masked = masked.replace(w, "\0" * len(w))
+        mine = set((d.terms.get(own) or {}).get("avoid") or []) if own else set()
+        for bad, prefer in avoid:
+            if bad and bad in masked and bad not in words and bad not in mine:
+                i = masked.index(bad)
+                out.append({"where": where, "word": bad, "prefer": prefer, "at": text[max(0, i - 8): i + len(bad) + 8]})
+    return out
+
+
 def check_rulings(d: Definition) -> list[dict]:
     """裁定の形：決まった裁定には decision、未決（status: open）には question。rules・refs・supersedes の参照先。"""
     bad = []

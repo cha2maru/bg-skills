@@ -24,3 +24,4 @@ description: bg-skills のゲーム定義で、ルールの自然文と定義（
 3. **ルールの穴を探す**：同数・同時・山札切れ・置き場の上限・誰も行えない局面・手番を飛ばす・棄権。見つけたら定義の `rulings` に書く（決められれば `decision` と `reason`・`authority`、決められなければ `status: open` で問いだけ）。`bg rulings <対局>` で、対局中の裁定から持ち帰る候補も見る。書き方は examples/rune-clash.yaml の rulings と、sangeki の wiki/notes/rulings.md を手本にする。
 4. **報告**：表（ルール ID・対応するアクション・ずれ・直し方）、穴の一覧と案、直したもの。定義を直したら `bg check`・`bg fuzz` を通し直す。
 - 詳細ルール（`detail: true`）がある作品では、手引きのルールと詳細ルールの食い違いも探す（食い違えば詳細ルールが正しい）。`bg complexity` の rules_detail と、via（手引き→詳細ルール→機械の層）も見る。
+- 用語の表記（RUL-029）：`bg check` の `wording`（使わない言葉）を片づけ、同じものが別の名前で書かれていないか（部品の name・ルールの文・用語・画面の名前）を見る。初出の表記（`first`）が要る独自の言葉が無いかも見る。

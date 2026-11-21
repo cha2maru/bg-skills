@@ -244,7 +244,9 @@ def main(argv=None):
             d = load(a.definition, None, None, a.variants)
             bad = check_refs(d)
             opens = [r["id"] for r in d.data.get("rulings") or [] if r.get("status") == "open"]
-            _out({"missing_refs": bad, **({"open_rulings": opens} if opens else {})})  # 未決の裁定＝分かっている穴（誤りではない）
+            from .tools import check_wording
+            wording = check_wording(d)  # 用語の表記（使わない言葉）。知らせで、誤りではない（RUL-029）
+            _out({"missing_refs": bad, **({"open_rulings": opens} if opens else {}), **({"wording": wording} if wording else {})})  # 未決の裁定＝分かっている穴（誤りではない）
             return 1 if bad else 0
         if a.cmd == "expand":
             _out(load(a.definition, a.players).data)

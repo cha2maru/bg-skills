@@ -1,4 +1,4 @@
-"""ゲーム定義の形式の正本（CTR-F-001 r6）：置き場所ごとに使ってよい項目。
+"""ゲーム定義の形式の正本（CTR-F-001 r7）：置き場所ごとに使ってよい項目。
 
 bg check はこれに無い項目（打ち間違い・古い書き方）を、似た項目の候補つきで知らせる。bg schema は同じ表から
 JSON Schema を書き出す（エディタの補完・エージェントの読み物）。項目を足すときは、ここと CTR-F-001 を一緒に直す。
@@ -39,7 +39,7 @@ FIELDS: dict[str, set[str]] = {
     "scoring": {"by", "tiebreak", "low"},
     "metric": {"id", "name", "per", "count", "sum", "expr", "needs", "visible", "badge", "refs"},
     "rule": {"id", "type", "text", "refs", "source", "seat", "detail"},  # detail：詳細ルール（手引きに出さない。RUL-024）
-    "term": {"word", "text", "refs"},
+    "term": {"word", "text", "refs", "avoid", "first"},  # avoid：使わない言葉、first：初めて出たときの表記（RUL-029）
     # 裁定（ルールの穴を埋める。RUL-017。sangeki の wiki/notes/rulings.md を参考）
     "ruling": {"id", "question", "decision", "reason", "rules", "refs", "principle", "status", "authority", "by", "date",
                "sources", "found_in", "supersedes", "engine"},
@@ -153,7 +153,7 @@ def json_schema() -> dict:
     action = obj("action", {"params": {"type": "array", "items": obj("param", {"require": req})}, "require": req,
                             "steps": steps, "cost": steps})
     return {
-        "$schema": "https://json-schema.org/draft/2020-12/schema", "title": "bg-skills game definition (CTR-F-001 r6)",
+        "$schema": "https://json-schema.org/draft/2020-12/schema", "title": "bg-skills game definition (CTR-F-001 r7)",
         "$defs": defs,
         **obj("top", {
             "game": obj("game"), "players": {"type": "array", "items": obj("player")},

@@ -1,7 +1,7 @@
 ---
 type: functional-contract
 id: CTR-F-001
-revision: 6
+revision: 7
 title: ゲーム定義の形式（bg-def）
 provider: /structure/CMP-0101.md
 format: file-format
@@ -116,7 +116,7 @@ implementation: []
 | flow | 辞書 | | stages（on_start・talk・talk_text・whisper：hidden なら内緒話はあったことも見せない）・turns（on_start：手順を 1 つずつ行い、後の式は結果を読む、on_end：手番が替わる前に行う手順（手札の上限など）、phases：main・max・each（メインアクションごとの回数）・per_player・sequence・required・auto・pass・by・talk、free（max・phases：行えるフェーズ）・reactions）・cycle・end_when（expr・text・winners・losers・draw・winners: scoring・timing：now・turn_end・round_end。並びが優先）・auto_end（満たしたら結果を記録して終える）・scoring（by・tiebreak・low）・signals（public：プレイヤーにも出す）・offer_action（提案が成立したら出した人が行ったことにするアクション）・stack（fifo ならキュー） | 原型：進行 |
 | metrics | 並び | | id・per・count・expr・needs・visible・badge | 名前つきの式 |
 | functions | 対応表 | | 名前 → params・expr | 名前つきの式（引数を持つ。どの式からも 名前(引数) で呼ぶ） |
-| terms | 辞書 | | word・text・refs | 原型：用語 |
+| terms | 辞書 | | word・text・refs・avoid（使わない言葉。bg check が wording で知らせる）・first（初めて出たときの表記。bg rulebook が初出をこの形に。r7） | 原型：用語。呼び名と表記の決まりも持つ（RUL-029） |
 | rulings | 並び | | id・question・decision・reason・rules・refs・principle・status（decided・open）・authority（official・author・designer・keeper）・by・date・sources・found_in・supersedes・engine | ルールの派生：文で決まらない点（ルールの穴）を決める裁定（RUL-017） |
 | rules | 並び | ○ | id・type・text・refs・source・seat・detail（true なら詳細ルール：手引きに出さず、定義・裁き・機械の層の正本として使う。総合ルールなど。r4、RUL-024） | 原型：ルール（正本）。詳細ルールは手引きのルールを細かく決めたもので、食い違えば詳細ルールが優先 |
 

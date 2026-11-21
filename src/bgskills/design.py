@@ -246,9 +246,21 @@ def rulebook(d: Definition) -> str:
     """人が読む手引き（Markdown。SPC-076）。詳細ルール（detail: true）と未決の裁定は出さない。"""
     g = d.data["game"]
     pl = g.get("players") or {}
+    # 用語の初出の表記（RUL-029）：文書の上から、用語の言葉が初めて出た所を first（例：波（ウェーブ））にする
+    firsts = sorted(((str(t["word"]), str(t["first"])) for t in d.terms.values() if t.get("word") and t.get("first")),
+                    key=lambda x: len(x[0]), reverse=True)
+    seen: set[str] = set()
+
+    def intro(text: str) -> str:
+        for word, first in firsts:
+            if word not in seen and word in text:
+                seen.add(word)
+                if first not in text:
+                    text = text.replace(word, first, 1)
+        return text
     out = [f"# {g.get('name') or g['id']}", ""]
     if g.get("summary"):
-        out += [str(g["summary"]).strip(), ""]
+        out += [intro(str(g["summary"]).strip()), ""]
     out += [f"- 人数：{pl.get('min')}〜{pl.get('max')} 人" if pl.get("min") != pl.get("max") else f"- 人数：{pl.get('min')} 人",
             f"- 版：{g.get('version')}", ""]
     # 部品：種類ごとの名前と数（区別しない部品は個数、unlimited は「必要なだけ」）
@@ -266,7 +278,7 @@ def rulebook(d: Definition) -> str:
             kd = d.kinds.get(k) or {}
             name = kd.get("name") or k
             text = f"：{kd['text']}" if kd.get("text") else ""
-            out.append(f"- {name} × {n}{text}")
+            out.append(intro(f"- {name} × {n}{text}"))
         out.append("")
     manual = [r for r in d.data.get("rules") or [] if not r.get("detail")]
     if manual:
@@ -274,11 +286,11 @@ def rulebook(d: Definition) -> str:
         for t in ORDER + sorted({r.get("type") for r in manual} - set(ORDER) - {None}):
             rs = [r for r in manual if r.get("type") == t]
             if rs:
-                out += [f"### {TYPE_NAME.get(t, t)}", ""] + [f"- {str(r['text']).strip()}" for r in rs] + [""]
+                out += [f"### {TYPE_NAME.get(t, t)}", ""] + [intro(f"- {str(r['text']).strip()}") for r in rs] + [""]
         rest = [r for r in manual if not r.get("type")]
-        out += [f"- {str(r['text']).strip()}" for r in rest] + ([""] if rest else [])
+        out += [intro(f"- {str(r['text']).strip()}") for r in rest] + ([""] if rest else [])
     if d.terms:
-        out += ["## 用語", ""] + [f"- **{t.get('word') or k}**：{t.get('text', '')}" for k, t in d.terms.items()] + [""]
+        out += ["## 用語", ""] + [f"- **{t.get('first') or t.get('word') or k}**：{t.get('text', '')}" for k, t in d.terms.items()] + [""]
     faq = [r for r in d.data.get("rulings") or [] if r.get("status") != "open" and r.get("decision")]
     if faq:
         out += ["## よくある質問", ""] + [f"- **{r.get('question')}** → {r.get('decision')}" for r in faq] + [""]

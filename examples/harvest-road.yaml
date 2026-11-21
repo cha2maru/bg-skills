@@ -18,13 +18,15 @@ players:
 kinds:
   crop:
     base: object
-    text: 作物の札。色（麦・豆・実）と数（1〜3）がある。
+    name: 作物のカード
+    text: 作物のカード。色（麦・豆・実）と数（1〜3）がある。
     attributes:
       title: {type: text}
       color: {type: text, text: 麦・豆・実のどれか。}
       value: {type: number, text: 取ったときに進むマスの数。}
   marker:
     base: object
+    name: 得点の駒
     shape: pawn
     text: 得点の駒。道のマスの番号が、その人の得点。
   cell:
@@ -171,6 +173,22 @@ metrics:
   - {id: score, name: 得点, badge: true, per: player, expr: "score(player)", refs: [R2, R3]}
   - {id: sets, name: 組, per: player, expr: "sets(player)", refs: [R4]}
   - {id: final, name: 終わりの得点, per: player, expr: "score(player) + 3 * sets(player)", refs: [R4]}
+
+terms:  # 用語と表記（RUL-029）。avoid は使わない言葉（bg check が知らせる）、first は初めて出たときの表記（bg rulebook）
+  term-card:
+    word: カード
+    avoid: [札]
+    text: 作物の絵と数が書かれた 1 枚。「札」とは書かない。
+    refs: [crop]
+  term-deck:
+    word: 山札
+    text: 裏向きに積んだカードの山。決まった言い方なので「山のカード」とは言い換えない。
+    refs: [deck]
+  term-round:
+    word: 巡
+    first: 巡（ラウンド）
+    text: 全員が 1 回ずつ手番を行うまでのひとまとまり。巡の終わりに色ごとの一番が進む。
+    refs: [R3]
 
 rules:
   - {id: R1, type: setup, text: 作物 27 枚を切って山札にし、4 枚を市場に表向きで並べる。駒はみな道の 0 に置く。P1 から。, refs: [crop, marker]}

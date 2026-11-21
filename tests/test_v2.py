@@ -119,3 +119,26 @@ def test_AC_077_1_skills_for_start_and_iterate():
     if shutil.which("claude"):
         out = subprocess.run(["claude", "plugin", "validate", str(ROOT)], capture_output=True, text=True, timeout=120).stdout
         assert "bg-skills:bg-start" in out and "bg-skills:bg-iterate" in out
+
+
+def test_AC_078_1_wording_avoid_and_masks(tmp_path):
+    """用語の表記（RUL-029）：avoid の言葉が人の読む文に出たら、場所と言い換えの候補を知らせる。登録した用語の中の文字（山札・切札の札）と、
+    その用語自身の説明で避ける言葉を挙げるのは数えない。"""
+    from bgskills.tools import check_wording
+    d = yaml.safe_load((ROOT / "examples/harvest-road.yaml").read_text(encoding="utf-8"))
+    assert check_wording(load(ROOT / "examples/harvest-road.yaml", 2)) == []
+    d["rules"][0]["text"] += " 残りの札は箱へ。"
+    d["kinds"]["crop"]["text"] = "切札ではない作物の札。"
+    d["terms"]["term-trump"] = {"word": "切札", "text": "強いカード。"}
+    p = tmp_path / "h.yaml"
+    p.write_text(yaml.safe_dump(d, allow_unicode=True), encoding="utf-8")
+    w = check_wording(load(p, 2))
+    assert {(x["where"], x["prefer"]) for x in w} == {("rules.R1", "カード"), ("kinds.crop.text", "カード")}
+    main_rc = main(["check", str(p)])
+    assert main_rc == 0  # 知らせで、誤りではない
+
+
+def test_AC_078_2_rulebook_first_use():
+    md = rulebook(load(ROOT / "examples/harvest-road.yaml", 2))
+    assert md.count("巡（ラウンド）") == 2 and md.index("巡（ラウンド）") < md.index("巡の終わりに、揃えた")  # 初出＋用語の節
+    assert "- **巡（ラウンド）**：" in md and "作物のカード × 27" in md
