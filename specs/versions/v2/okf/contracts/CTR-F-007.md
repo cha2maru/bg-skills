@@ -1,12 +1,12 @@
 ---
 type: functional-contract
 id: CTR-F-007
-revision: 1
+revision: 2
 title: 設計の作業場の形式（ゲームのフォルダ・案の重ね方・試行の記録）
 provider: /structure/CMP-0104.md
 format: file-format
 thickness: thin
-elements: [ゲームの作業場, 案, 試行の記録]
+elements: [ゲームの作業場, 案, 試行の記録, 思考ルーチン]
 status: stable
 tags: [v2]
 implementation: []
@@ -31,6 +31,7 @@ implementation: []
 | `variants/<名前>.yaml` | 案：定義の断片（CTR-F-001 と同じ形式の一部）。`--with` で重ねる |
 | `experiments.jsonl` | 試行の記録（1 行 1 試行。追記だけ） |
 | `journal.md` | 設計の日誌（版ごとに、変えたこと・理由・根拠の試行） |
+| `bots/<名前>.md`・`bots/<名前>.py` | 思考ルーチン：考える順番（人が読む表）と、`choose(ctx)` を持つ Python（r2、RUL-030） |
 | `sessions/` | 対局のフォルダ（CTR-F-002）。`.gitignore` で git の外 |
 
 ## 案の重ね方
@@ -51,6 +52,6 @@ implementation: []
 | def_hash | 定義と重ねた案の指紋（中身が同じなら同じ） |
 | variants | 重ねた案の名前の並び（元だけなら空） |
 | players・games・seed・max_turns | 回した条件 |
-| tool | selfplay か compare |
+| tool | selfplay・compare・league（league の result は方針ごとの結果と paired） |
 | result | 結果（終わり方ごとの数、平均の手番数） |
 | note | 利用者の書き添え（`--note`） |

@@ -54,12 +54,8 @@ def visible_ops(s, state, ops, player):
     return out
 
 
-def visible_candidates(d, state, player, cands: list[dict]) -> list[dict]:
-    """引数の候補を player の立場で：見えていない区別される部品（相手の手札・山札など）の候補を出さない。
-    置き場（from）を書かず種類だけで選ぶ引数は、卓全体から候補を探すため（ふるよにの再現で見つかった。RUL-024）。"""
-    if not player or player not in d.players:
-        return cands
-    from .view import view
+def seen_ids(view_areas) -> set:
+    """見え方（areas）の中で、ID が出ている部品。"""
     seen = set()
 
     def walk(x):
@@ -71,5 +67,16 @@ def visible_candidates(d, state, player, cands: list[dict]) -> list[dict]:
         elif isinstance(x, list):
             for y in x:
                 walk(y)
-    walk(view(d, state, player).get("areas"))
+    walk(view_areas)
+    return seen
+
+
+def visible_candidates(d, state, player, cands: list[dict], seen: set | None = None) -> list[dict]:
+    """引数の候補を player の立場で：見えていない区別される部品（相手の手札・山札など）の候補を出さない。
+    置き場（from）を書かず種類だけで選ぶ引数は、卓全体から候補を探すため（ふるよにの再現で見つかった。RUL-024）。"""
+    if not player or player not in d.players:
+        return cands
+    if seen is None:  # 何度も呼ぶ側（bot.legal_moves）は、見え方を 1 回だけ作って seen を渡す
+        from .view import view
+        seen = seen_ids(view(d, state, player).get("areas"))
     return [c for c in cands if c["id"] not in d.parts or not d.distinct(c["id"]) or c["id"] in seen]

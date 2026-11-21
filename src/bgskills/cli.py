@@ -196,6 +196,17 @@ def main(argv=None):
     c.add_argument("--with", dest="variants", action="append", default=[], help="案（定義の断片）を重ねる。何枚でも、順に（CTR-F-007）")
     c.add_argument("--record", help="試行の記録（experiments.jsonl）に 1 行足す")
     c.add_argument("--note", help="試行の記録への書き添え")
+    c = sub.add_parser("league", help="思考ルーチンどうしを、席を回して多数局戦わせる（RUL-030）")
+    c.add_argument("definition")
+    c.add_argument("--bot", action="append", default=[], help="名前=ファイル（choose(ctx) を持つ Python）か random。2 つ以上")
+    c.add_argument("--players", type=int, required=True)
+    c.add_argument("--games", type=int, default=10, help="種の数（それぞれ方針の数だけ席を回す）")
+    c.add_argument("--max-turns", type=int, default=80)
+    c.add_argument("--seed", type=int, default=0)
+    c.add_argument("--with", dest="variants", action="append", default=[], help="案を重ねる")
+    c.add_argument("--record", help="試行の記録（experiments.jsonl）に 1 行足す")
+    c.add_argument("--note", help="試行の記録への書き添え")
+    c.add_argument("--trace", help="判断の記録（1 行 1 手）を書き出す")
     c = sub.add_parser("experiments", help="試行の記録を新しい順に出す")
     c.add_argument("log")
     c.add_argument("--last", type=int)
@@ -444,6 +455,18 @@ def main(argv=None):
                 for name, row in r["rows"].items():
                     record(a.record, a.definition, a.variants + ([vs[name]] if name in vs else []), "compare", a.players, a.games,
                            a.seed, a.max_turns, row, a.note)
+            _out(r)
+        elif a.cmd == "league":
+            from .bot import league, record_league
+            bots = dict((x.split("=", 1) if "=" in x else (x, x)) for x in a.bot)
+            if len(bots) < 2:
+                raise OpError("--bot を 2 つ以上（名前=ファイル か random）")
+            tr = [] if a.trace else None
+            r = league(a.definition, bots, a.players, a.games, a.seed, a.max_turns, a.variants, tr)
+            if a.record:
+                record_league(a.record, a.definition, bots, a.players, a.games, a.seed, a.max_turns, r, a.variants, a.note)
+            if a.trace:
+                Path(a.trace).write_text("".join(json.dumps(t, ensure_ascii=False) + "\n" for t in tr), encoding="utf-8")
             _out(r)
         elif a.cmd == "experiments":
             from .design import experiments

@@ -40,6 +40,7 @@ uv run bg check examples/tic-tac-toe.yaml
 | `bg-design` | ゲームのアイデアを定義（YAML）に起こし、`bg check`・`bg fuzz` を通す |
 | `bg-iterate` | 案を作って元と比べ、試行を記録し、取り込んで版を上げる（改訂の 1 周） |
 | `bg-playtest` | エージェントに席ごとの見え方だけで遊ばせ、詰まり・不具合・ルールの穴を報告させる |
+| `bg-ai` | ルールに則した思考ルーチン（ボット）を作り、リーグ戦（`bg league`）で強さを測って改良する |
 | `bg-balance` | 多数局で勝率・局の長さを測り、数値を 1 つずつ変えて比べる |
 | `bg-rules-audit` | ルールの文と定義の食い違い・穴を洗い出す |
 | `bg-hidden-info-audit` | 隠れた情報が出力から漏れないかをチェック表で確かめる |
