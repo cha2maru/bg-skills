@@ -411,3 +411,15 @@ def test_check_path_needs_viewbox(tmp_path):
     (tmp_path / "p.yaml").write_text(yaml.safe_dump(d, allow_unicode=True), encoding="utf-8")
     bad = {x["where"] for x in check_refs(Definition(d))}
     assert bad == {"area a.path", "area b2.viewbox"}
+
+
+def test_fuzz_reaches_turn_actions():
+    """bg fuzz の「一度も行えないアクション」が当てになる（全体レビューの指摘）：手番の人・今行えるアクションから選び、
+    手番のある段階を飛ばさない。以前は、かがり火の全アクション・人狼のほぼ全部が「行えない」と出た。"""
+    from bgskills.sim import fuzz
+    k = fuzz(EX / "kagaribi.yaml", 2, games=2, steps=120)
+    assert {"draw", "stoke", "discard"}.isdisjoint(k["never_done"]) and k["expr_errors"] == [] and k["crashes"] == []
+    w = fuzz(EX / "werewolf.yaml", 5, games=2, steps=150)
+    assert {"setup", "attack", "divine"}.isdisjoint(w["never_done"]) and w["crashes"] == []
+    m = fuzz(EX / "mahjong.yaml", 4, games=2, steps=120)
+    assert m["expr_errors"] == []  # 捨て牌が無いときのポン・チー

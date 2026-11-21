@@ -129,7 +129,7 @@ actions:
     rule: R3
     when: ほかの人が打牌した直後。同じ牌を 2 枚持っているとき。
     params:
-      - {name: giver, players: true, require: [{expr: "value != actor", text: 自分の捨て牌}]}
+      - {name: giver, players: true, require: [{expr: "value != actor", text: 自分の捨て牌}, {expr: "len(on('river-' + value)) > 0", text: 捨て牌がない}]}
       - {name: t1, from: "hand-{actor}", kind: tile}
       - {name: t2, from: "hand-{actor}", kind: tile, require: [{expr: "value != t1 and attr(value, 'suit') == attr(t1, 'suit') and attr(value, 'rank') == attr(t1, 'rank')", text: 1 枚めと同じ牌ではない}]}
     steps:
@@ -143,6 +143,8 @@ actions:
     name: チー
     rule: R3
     when: 上家（左隣）が打牌した直後。その牌と順子になる 2 枚を持っているとき。
+    require:
+      - {expr: "len(on('river-' + seat(actor, -1))) > 0", text: 上家の捨て牌がない}
     params:
       - {name: t1, from: "hand-{actor}", kind: tile}
       - {name: t2, from: "hand-{actor}", kind: tile}

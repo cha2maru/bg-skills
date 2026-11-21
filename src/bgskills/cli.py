@@ -416,19 +416,19 @@ def main(argv=None):
             from .schema import json_schema
             print(json.dumps(json_schema(), ensure_ascii=False, indent=1))
         elif a.cmd == "quiz":
-            from .tools import quiz
+            from .sim import quiz
             _out(quiz(a.definition, a.players, a.n, a.seed, a.out))
         elif a.cmd == "quiz-grade":
-            from .tools import quiz_grade
+            from .sim import quiz_grade
             _out(quiz_grade(a.answers, a.responses))
         elif a.cmd == "playstats":
-            from .tools import playstats
+            from .measure import playstats
             _out(playstats(Session(a.session)))
         elif a.cmd == "complexity":
-            from .tools import complexity
+            from .measure import complexity
             _out(complexity(load(a.definition, a.players, None, a.variants)))
         elif a.cmd == "selfplay":
-            from .tools import selfplay
+            from .sim import selfplay
             r = selfplay(a.definition, a.players, a.games, a.max_turns, a.seed, a.variants)
             if a.record and "error" not in r:
                 from .design import _summary, record
@@ -456,7 +456,7 @@ def main(argv=None):
             from .design import rulebook
             sys.stdout.write(rulebook(load(a.definition, a.players, None, a.variants)))
         elif a.cmd == "fuzz":
-            from .tools import fuzz
+            from .sim import fuzz
             r = fuzz(a.definition, a.players, a.games, a.steps, a.seed, a.variants)
             _out(r)
             if r["crashes"] or r["expr_errors"]:

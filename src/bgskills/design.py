@@ -10,8 +10,6 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-import yaml
-
 from .definition import Definition, load
 
 # --- 作業場の雛形 ---------------------------------------------------------------------------------
@@ -177,7 +175,7 @@ def _summary(r: dict) -> dict:
 
 def compare(path, variants: dict, players: int, games: int = 20, max_turns: int = 60, seed: int = 0, common=None) -> dict:
     """元（base）と案を、同じ種・同じ局数で selfplay して並べる。variants は {名前: 案のファイル}。common は全部に重ねる案。"""
-    from .tools import selfplay
+    from .sim import selfplay
     common = list(common or [])
     rows = {"base": _summary(selfplay(path, players, games, max_turns, seed, common))}
     for name, f in variants.items():
@@ -217,7 +215,8 @@ def experiments(log, last: int | None = None) -> list[dict]:
 
 def status(d: Definition, log=None) -> dict:
     """設計の状態の一覧（SPC-075）：版・ルール・決まっていないこと・機械の層・最近の試行。"""
-    from .tools import check_refs, complexity
+    from .measure import complexity
+    from .tools import check_refs
     g = d.data["game"]
     rules = d.data.get("rules") or []
     c = complexity(d)
