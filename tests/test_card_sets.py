@@ -1,5 +1,6 @@
 """カードセット（基本・拡張）を 1 つの定義に複数持ち、準備で選んで混ぜる（RUL-027）。形式に項目を足さずに書けることの確かめ。
-セットは部品の属性 set、全部の部品は箱から始め、準備のアクションで選んだセットだけを山札へ移して切る。混ぜ方の制約は条件（require）。"""
+セットは部品の属性 set、全部の部品は箱から始め、準備のアクションで選んだセットだけを移す。混ぜ方の制約は条件（require）。
+混ぜるのは置き場ごと：通常札はセットをまたいで山札で混ざり、切札は切札の置き場で混ざる。山札と切札は混ざらない（ふるよにのメガミと同じ）。"""
 import pytest
 
 from bgskills.session import OpError, Session
@@ -15,11 +16,14 @@ areas:
   - {id: sets-available, name: 持っているセット}
   - {id: sets-chosen, name: 使うセット}
   - {id: deck, name: 山札, ordered: true, visibility: {face: none, order: none}}
+  - {id: specials, name: 切札, visibility: {face: owner}}
 objects:
   - {id: "set-{s}", for_each: {s: [base, exp-a, exp-b]}, kind: set-tile, start: sets-available, attributes: {set: "{s}"}}
-  - {id: "base-{copy}", kind: card, copies: 6, start: box, attributes: {set: base}}
-  - {id: "expa-{copy}", kind: card, copies: 3, start: box, attributes: {set: exp-a}}
-  - {id: "expb-{copy}", kind: card, copies: 3, start: box, attributes: {set: exp-b}}
+  - {id: "base-{copy}", kind: card, copies: 6, start: box, attributes: {set: base, cat: normal}}
+  - {id: "expa-{copy}", kind: card, copies: 3, start: box, attributes: {set: exp-a, cat: normal}}
+  - {id: "expb-{copy}", kind: card, copies: 3, start: box, attributes: {set: exp-b, cat: normal}}
+  - {id: "base-s{copy}", kind: card, copies: 2, start: box, attributes: {set: base, cat: special}}
+  - {id: "expb-s{copy}", kind: card, copies: 1, start: box, attributes: {set: exp-b, cat: special}}
 actions:
   - id: choose-set
     name: 使うセットを選ぶ
@@ -38,7 +42,10 @@ actions:
     steps:
       - each: "[c for c in on('box') if attr(c, 'set') in [attr(t, 'set') for t in on('sets-chosen')]]"
         as: c
-        do: [{op: move, obj: "{c}", to: deck}]
+        do:
+          - if: "attr(c, 'cat') == 'normal'"
+            do: [{op: move, obj: "{c}", to: deck}]
+            else: [{op: move, obj: "{c}", to: specials}]
       - {op: shuffle, area: deck}
 flow:
   stages: [{id: setup, name: 準備, actions: [choose-set, mix]}]
@@ -60,8 +67,10 @@ def test_choose_sets_and_mix(tmp_path):
         s.act("choose-set", "keeper", {"tile": "set-exp-a"})
     s.act("mix", "keeper")
     st = s.state()
-    sets = {s.defn.parts[c]["attributes"]["set"] for c in st["places"]["deck"]}
-    assert sets == {"base", "exp-b"} and len(st["places"]["deck"]) == 9
+    at = lambda c: s.defn.parts[c]["attributes"]
+    assert {at(c)["set"] for c in st["places"]["deck"]} == {"base", "exp-b"} and len(st["places"]["deck"]) == 9
+    assert {at(c)["cat"] for c in st["places"]["deck"]} == {"normal"}  # 山札に切札は混ざらない
+    assert {at(c)["set"] for c in st["places"]["specials"]} == {"base", "exp-b"} and {at(c)["cat"] for c in st["places"]["specials"]} == {"special"}
     assert all(s.defn.parts[c]["attributes"]["set"] == "exp-a" for c in st["places"]["box"] if isinstance(c, str))
     assert st["places"]["deck"] != sorted(st["places"]["deck"])  # 混ぜて切った
 
