@@ -56,3 +56,4 @@
 - RUL-024 を記録。CTR-F-001 を r4 に改版（rules の detail を追加。追加だけ）。参照する開発オブジェクトの rev を 4 に揃えた。
 - RUL-025 を記録。CTR-F-001 を r5 に改版（area の path・viewbox を追加。追加だけ）。参照する開発オブジェクトの rev を 5 に揃えた。
 - RUL-026 を記録。CTR-F-001 を r6 に改版（area の slot を追加。追加だけ）。参照する開発オブジェクトの rev を 6 に揃えた。
+- RUL-027 を記録（カードセットの定義と混ぜ方。tests/test_card_sets.py）。
