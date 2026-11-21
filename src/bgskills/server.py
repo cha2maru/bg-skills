@@ -88,7 +88,9 @@ def make_handler(session_dir):
                 elif u.path == "/api/candidates":  # アクションの引数の候補と条件（SPC-052）
                     from .query import candidates
                     args = json.loads(q["args"]) if q.get("args") else None
-                    self._send(200, candidates(s.defn, s.state(), q["action"], q["by"], q["param"], args))
+                    from .redact import visible_candidates  # 見えていない部品は候補に出さない
+                    st = s.state()
+                    self._send(200, visible_candidates(s.defn, st, q["by"], candidates(s.defn, st, q["action"], q["by"], q["param"], args)))
                 else:
                     self._send(404, {"error": "not found"})
             except (ValueError, KeyError) as e:  # OpError・DefinitionError・式の誤りも ValueError

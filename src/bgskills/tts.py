@@ -157,7 +157,7 @@ def to_tts(d: Definition, state: dict, face_url: str, back_url: str, seats: dict
         for o in items:
             if isinstance(o, dict):
                 objs += item(o, x + 2.5, z)
-    rules = "\n\n".join(f"[{r['id']}] {r['text']}" for r in d.data.get("rules") or [])
+    rules = "\n\n".join(f"[{r['id']}] {r['text']}" for r in d.data.get("rules") or [] if not r.get("detail"))  # 詳細ルールは手引きに出さない（RUL-024）
     g = d.data["game"]
     return {"SaveName": f"{g.get('name') or g['id']}（版 {g.get('version')}）", "GameMode": "", "Date": "",
             "Gravity": 0.5, "PlayArea": 0.5, "Table": "", "Sky": "", "Note": g.get("summary", ""), "Rules": rules,

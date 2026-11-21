@@ -12,6 +12,8 @@
 """
 from __future__ import annotations
 
+import re
+
 from .definition import Definition, fill
 
 
@@ -110,9 +112,18 @@ def check_param(d: Definition, state: dict, param: dict, value: str, env: dict) 
 
 def check_action(d: Definition, state: dict, action: dict, env: dict) -> list[str]:
     """アクション全体の条件（行う人への条件など。require の expr）。"""
-    from .expr import evaluate
-    return [c.get("text") or "アクションの条件を満たさない" for c in action.get("require") or []
-            if not evaluate(c["expr"], d, state, {**env, "value": env.get("actor")})]
+    from .expr import ExprError, evaluate
+    out = []
+    for c in action.get("require") or []:
+        try:
+            ok = evaluate(c["expr"], d, state, {**env, "value": env.get("actor")})
+        except ExprError:
+            if any(re.search(rf"\b{re.escape(p['name'])}\b", c["expr"]) for p in action.get("params") or []):
+                continue  # 引数（選ぶもの）を読む条件は、選ぶまで判断できない（行えない理由に出さない）
+            raise
+        if not ok:
+            out.append(c.get("text") or "アクションの条件を満たさない")
+    return out
 
 
 def candidates(d: Definition, state: dict, action_id: str, actor: str, param_name: str, args: dict | None = None) -> list[dict]:

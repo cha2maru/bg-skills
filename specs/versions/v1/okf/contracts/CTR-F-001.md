@@ -1,7 +1,7 @@
 ---
 type: functional-contract
 id: CTR-F-001
-revision: 3
+revision: 4
 title: ゲーム定義の形式（bg-def）
 provider: /structure/CMP-0101.md
 format: file-format
@@ -118,7 +118,7 @@ implementation: []
 | functions | 対応表 | | 名前 → params・expr | 名前つきの式（引数を持つ。どの式からも 名前(引数) で呼ぶ） |
 | terms | 辞書 | | word・text・refs | 原型：用語 |
 | rulings | 並び | | id・question・decision・reason・rules・refs・principle・status（decided・open）・authority（official・author・designer・keeper）・by・date・sources・found_in・supersedes・engine | ルールの派生：文で決まらない点（ルールの穴）を決める裁定（RUL-017） |
-| rules | 並び | ○ | id・type・text・refs | 原型：ルール（正本） |
+| rules | 並び | ○ | id・type・text・refs・source・seat・detail（true なら詳細ルール：手引きに出さず、定義・裁き・機械の層の正本として使う。総合ルールなど。r4、RUL-024） | 原型：ルール（正本）。詳細ルールは手引きのルールを細かく決めたもので、食い違えば詳細ルールが優先 |
 
 ## Validation Rules
 
@@ -129,6 +129,10 @@ implementation: []
 ## Example
 
 `examples/tic-tac-toe.yaml`（最小）、`examples/kagaribi.yaml`（カード）、`examples/hex-skirmish.yaml`（六角）、`examples/othello.yaml`・`chess.yaml`・`shogi.yaml`・`mahjong.yaml`（古典。RUL-005 #1）、`examples/werewolf.yaml`（発言・隠れた役職・投票。RUL-009）、`examples/beast-duel.yaml`（カードの効果・ステータス。RUL-011）。
+
+## 詳細ルール（r4）
+
+大会の審判用の総合ルールのように、遊ぶ人の手引きには出さないが定義には要るルールは、`rules` に `detail: true` で書く（RUL-024）。手引き（画面のルール欄の初めの一覧、TTS の書き出し）には出さず、画面では「詳細ルール」としてたたんで出す。裁定（rulings）は文（手引き・詳細ルール）で決まらない点だけを決める。強さ：詳細ルール＞手引きのルール＞裁定＞機械の層。
 
 ## Compatibility
 

@@ -556,3 +556,28 @@ def test_cards_and_tokens_look_different(tmp_path, browser):
     assert page.locator(".kids.grid.dense").count() == 1
     page.close()
     httpd.shutdown()
+
+
+def test_view_error_does_not_keep_previous_viewpoint(tmp_path, browser):
+    """見え方を作れなかったら（定義の式の誤りなど）、画面は前の立場（キーパー）の局面を出し続けない（漏れ。RUL-024 の検証で見つかった）。
+    詳細ルールは、ルール欄で手引きの後にたたんで出す。"""
+    import yaml
+    d = yaml.safe_load((EX / "kagaribi.yaml").read_text(encoding="utf-8"))
+    d["actions"][1]["require"] = [{"expr": "no_such_function()", "text": "壊れた条件"}]
+    d["rules"].append({"id": "CR1", "type": "always", "detail": True, "text": "詳細ルールの文"})
+    p = tmp_path / "broken.yaml"
+    p.write_text(yaml.safe_dump(d, allow_unicode=True), encoding="utf-8")
+    s = Session.create(tmp_path / "b", p, 2, {}, 1)
+    s.act("setup", "keeper")
+    httpd, url = _serve(s.dir)
+    page = browser.new_page(viewport={"width": 1440, "height": 900})
+    page.goto(url)
+    page.wait_for_timeout(1500)
+    assert page.locator("[data-area=hand-P2] .card[data-obj]").count() == 3  # キーパーには見える
+    assert page.locator("details.detailrules").count() == 1 and not page.locator("details.detailrules").evaluate("e => e.open")
+    page.select_option("#as", "P1")
+    page.wait_for_timeout(1500)
+    assert page.locator("[data-area=hand-P2] .card[data-obj]").count() == 0
+    assert "局面を出せない" in page.locator("#table").inner_text()
+    page.close()
+    httpd.shutdown()

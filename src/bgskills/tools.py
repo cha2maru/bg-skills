@@ -447,7 +447,7 @@ def random_step(s, rnd, staged: dict, max_turns: int = 60) -> str | None:
             return None
         except OpError:
             continue
-    for to in (("turn", "stage") if f.get("active") else ("stage", "phase")):
+    for to in (("phase", "turn", "stage") if f.get("active") else ("stage", "phase")):  # 次のフェイズへ（手番ごと飛ばすとメインフェイズに入らない作品がある）
         try:
             s.apply({"op": "advance", "by": "keeper", "to": to})
             return None
@@ -527,12 +527,16 @@ def complexity(d: Definition) -> dict:
         for rid in r.get("rules") or []:
             if rid in layer:
                 layer[rid].append(f"ruling {r.get('id')}" + ("（未決）" if r.get("status") == "open" else ""))
+    for r in rules:  # 手引きのルールが詳細ルールを指し、その詳細ルールに機械の層があれば、それを通じて機械の層を持つ（RUL-024）
+        if not r.get("detail") and not layer[r["id"]]:
+            layer[r["id"]] += [f"via {x}" for x in r.get("refs") or [] if x in layer and layer[x] and (d.rules.get(x) or {}).get("detail")]
     text_only = [rid for rid, xs in layer.items() if not xs]
     phases = sum(len(t.get("phases") or []) for t in (fl.get("turns") or {}).values())
     conds = sum(len(a.get("require") or []) + sum(len(p.get("require") or []) for p in a.get("params") or []) for a in acts)
     end = fl.get("end_when") or []
     return {
         "rules": len(rules), "rule_chars": sum(len(r.get("text") or "") for r in rules),
+        "rules_detail": sum(1 for r in rules if r.get("detail")),  # 詳細ルール（手引きに出さない。RUL-024）
         "rules_text_only": {"count": len(text_only), "ids": text_only},  # 機械の層がないルール（キーパーが文で裁く）
         "machine_layer": {rid: xs for rid, xs in layer.items() if xs},  # ルールごとに、機械で行う部分
         "actions": len(acts), "params": sum(len(a.get("params") or []) for a in acts), "conditions": conds,

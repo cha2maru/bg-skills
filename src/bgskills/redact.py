@@ -52,3 +52,24 @@ def visible_ops(s, state, ops, player):
             o["result"] = state["states"][obj]
         out.append(o)
     return out
+
+
+def visible_candidates(d, state, player, cands: list[dict]) -> list[dict]:
+    """引数の候補を player の立場で：見えていない区別される部品（相手の手札・山札など）の候補を出さない。
+    置き場（from）を書かず種類だけで選ぶ引数は、卓全体から候補を探すため（ふるよにの再現で見つかった。RUL-024）。"""
+    if not player or player not in d.players:
+        return cands
+    from .view import view
+    seen = set()
+
+    def walk(x):
+        if isinstance(x, dict):
+            if isinstance(x.get("id"), str) and "hidden" not in x:
+                seen.add(x["id"])
+            for y in x.values():
+                walk(y)
+        elif isinstance(x, list):
+            for y in x:
+                walk(y)
+    walk(view(d, state, player).get("areas"))
+    return [c for c in cands if c["id"] not in d.parts or not d.distinct(c["id"]) or c["id"] in seen]

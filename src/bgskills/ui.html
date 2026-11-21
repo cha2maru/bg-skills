@@ -339,7 +339,10 @@ async function refresh(force) {
   const log = await api(`/api/log${as ? "?as=" + encodeURIComponent(as) : ""}`);  // 記録も見る立場で伏せる
   if (!force && log.length === LOG.length && VIEW) return;
   LOG = log;
-  VIEW = await api(`/api/view?meaning=1${as ? "&as=" + encodeURIComponent(as) : ""}`);
+  try { VIEW = await api(`/api/view?meaning=1${as ? "&as=" + encodeURIComponent(as) : ""}`); }
+  catch (e) { // 見え方を作れなかったら、前の局面（別の立場の見え方かもしれない）を出し続けない
+    VIEW = null; $("#table").replaceChildren(h("p", {class: "empty"}, "局面を出せない：" + e.message)); toast("局面を出せない：" + e.message); return;
+  }
   render();
 }
 
@@ -762,7 +765,11 @@ function side() {
   if (TAB === "rules") {
     const rel = new Set((SEL && SEL.item && SEL.item.rules) || (SEL && VIEW.areas[SEL.id] && VIEW.areas[SEL.id].rules) || []);
     s.append(h("p", {class: "help"}, rel.size ? "色つきは、選んだものに関係するルール" : "ルールの本文（自然文が正本）"));
-    DEF.rules.forEach(r => s.append(h("div", {class: "rule" + (rel.has(r.id) ? " hl" : "")}, h("b", {}, r.id), ` [${r.type || ""}] ${r.text}`)));
+    const ruleEl = r => h("div", {class: "rule" + (rel.has(r.id) ? " hl" : "")}, h("b", {}, r.id), ` [${r.type || ""}] ${r.text}`);
+    DEF.rules.filter(r => !r.detail).forEach(r => s.append(ruleEl(r)));
+    const det = DEF.rules.filter(r => r.detail); // 詳細ルール（審判用。手引きには出さず、たたんで出す。RUL-024）
+    if (det.length) s.append(h("details", {class: "detailrules", ...(det.some(r => rel.has(r.id)) ? {open: true} : {})},
+      h("summary", {}, `詳細ルール（${det.length} 件。審判・キーパー向け）`), det.map(ruleEl)));
     if (VIEW.automa_rules) s.append(h("div", {class: "sec"}, h("h3", {}, "この席のオートマのルール"), Object.entries(VIEW.automa_rules).map(([k, t]) => h("div", {class: "rule hl"}, h("b", {}, k), " " + t))));
     const terms = Object.entries(DEF.terms);
     if (terms.length) s.append(h("div", {class: "sec"}, h("h3", {}, "用語"), terms.map(([k, t]) => h("div", {class: "rule"}, h("b", {}, t.word || k), " " + t.text))));

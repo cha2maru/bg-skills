@@ -339,6 +339,7 @@ def main(argv=None):
             _out({a.id: [{"to": o, "type": t, "shown": (v["areas"].get(o) or {}).get("shown")} for o, t in neighbors(s.defn, a.id, a.type)]})
         elif a.cmd == "candidates":
             from .query import candidates, check_action
+            from .redact import visible_candidates
             s = Session(a.session)
             act = next((x for x in s.defn.data.get("actions") or [] if x["id"] == a.action), None)
             if act is None:
@@ -355,7 +356,7 @@ def main(argv=None):
                    for e in st.get("stack") or []}
             for n in names:  # 候補に名前（title）を添える。スタックの番号には、誰の何か
                 out[n] = [{**c, **({"title": t} if (t := stk.get(c["id"]) or _title(s.defn, c["id"])) else {})}
-                          for c in candidates(s.defn, st, a.action, a.by, n, args)]
+                          for c in visible_candidates(s.defn, st, a.by, candidates(s.defn, st, a.action, a.by, n, args))]
                 prm = next(p for p in act.get("params") or [] if p["name"] == n)
                 if not out[n] and not prm.get("free"):
                     ap = ap + [f"{n} の候補がない"]

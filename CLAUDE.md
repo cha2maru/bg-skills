@@ -17,7 +17,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 画像：定義の `assets.root`（画像の置き場）と、エリアの `image`（背景）、部品・種類の `image`・`back_image`（`{default, "状態=値"}` で状態ごとに替えられる）。画面は `/assets/` で root の下だけを配る。惨劇RoopeR の再現（`local/tragedy-looper.yaml`、生成は `local/gen_tl.py`）は sangeki の惨劇コモンズ5th を指す（利用は惨劇RoopeR 関連に限る。公開時は「惨劇コモンズ作成：BakaFire・紺ノ玲」とリンクを表記）。
 
-サンプル：`examples/` に三目並べ・かがり火・六角・オセロ・チェス（名前つきの式 `functions` でチェック）・将棋・麻雀・人狼・精霊獣デュエル（架空。カードの効果とステータス、アクションの `stepwise`）・ルーン決闘（架空。スタックで割り込む、アクションの `cost`）・収穫の道（架空。得点の道・即時得点・巡の終わりの得点・終わりの得点）（古典は公開してよい）。`local/` に花火・ディプロマシー（生成 `local/gen_dip.py`）など市販品の再現。デモの対局は `local/social-demos.py` で作り直す。
+サンプル：`examples/` に三目並べ・かがり火・六角・オセロ・チェス（名前つきの式 `functions` でチェック）・将棋・麻雀・人狼・精霊獣デュエル（架空。カードの効果とステータス、アクションの `stepwise`）・ルーン決闘（架空。スタックで割り込む、アクションの `cost`）・収穫の道（架空。得点の道・即時得点・巡の終わりの得点・終わりの得点）（古典は公開してよい）。`local/` に花火・ディプロマシー（生成 `local/gen_dip.py`）・新幕 桜降る代に決闘を（生成 `local/gen_furuyoni.py`。総合ルールを詳細ルールに。出典『桜降る代に決闘を』BakaFire Party を明記し非営利に限る。画像は使っていない。コモンズの画像を使うなら「ふるよにコモンズ/BakaFire,TOKIAME」と rule.html へのリンク）など市販品の再現。デモの対局は `local/social-demos.py` で作り直す。
 
 終わり方（RUL-015、notes/endgame/gates.md）：`flow.end_when` の各件に `winners`・`losers`（式）・`draw`・`winners: scoring` と `timing`（now・turn_end・round_end）、`flow.auto_end` で結果を記録して終える、`flow.scoring`（by・tiebreak）で順位、手番の `on_end` で手番の終わりの処理。`bg complexity` でルールの複雑さの目安。
 
@@ -29,6 +29,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ルールの層（RUL-016。#31 を改めた）：
 - **ルールの文（`rules`）が正本**。エージェントもキーパーもまず文を読む。
+- **詳細ルール**（RUL-024）：審判用の総合ルールのように手引きには出さないが定義には要る文は、`rules` に `detail: true`。画面のルール欄ではたたみ、TTS には出さない。強さは詳細ルール＞手引きのルール＞裁定＞機械の層。整理は `specs/versions/v1/okf/notes/detail-rules/gates.md`。
 - **機械の層は、作品が選んで書いた分だけ**：条件（`require`・進行の区分と回数）、手順（`steps`・`on_start`・`on_end`・スタック）、終わり（`end_when` の結果・`scoring`）。参照・置き場・乱数・見え方は、どの作品でも機械で行う。
 - **裁定（`rulings`、RUL-017）は、文で決まらない点（ルールの穴）を決める**。1 件ごとに問い・裁定・理由・関わるルール・出典・重み（`authority`：official＞author＞designer＞keeper）・日付・見つかった対局を書く。決まっていない穴も `status: open` で書く（分かっている穴）。一般の原則は `principle: true`。sangeki の `wiki/notes/rulings.md` の書き方にならった。
 - 強さの順：ルールの文＞裁定＞機械の層。機械の層が文や裁定と食い違ったら、機械の層の不具合として直す。一次資料で明文が見つかったら、裁定のほうを直す。機械の層も裁定もない点は、キーパーが文で裁き、対局の裁定（`bg op` の ruling）に残す。`bg rulings <対局>` で定義へ持ち帰る候補が出る。`bg complexity` の `machine_layer` でルールごとの機械の層、`rules_text_only` で文だけのルールが分かる。

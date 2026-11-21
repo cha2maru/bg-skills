@@ -90,3 +90,40 @@ def test_server_log_is_redacted_for_viewer(tmp_path):
         httpd.shutdown()
     roles = {"W1", "W2", "SEER", "KNIGHT", "V1", "V2"}
     assert roles & {o.get("obj") for o in full} and not (roles - {s.state()["places"]["role-P1"][0]}) & {o.get("obj") for o in mine}
+
+
+def test_candidates_without_from_hide_unseen_parts(tmp_path, capsys):
+    """置き場（from）を書かず種類だけで選ぶ引数：候補を卓全体から探すが、相手の手札の ID は出さない（コマンドも画面の API も）。
+    ふるよにの再現（RUL-024）で見つかった。"""
+    import json
+    import threading
+    import urllib.request
+    from http.server import ThreadingHTTPServer
+    from bgskills.server import make_handler
+    (tmp_path / "d.yaml").write_text("""
+format: bg-def/0.1
+game: {id: c, name: 候補, version: 1, players: {min: 2, max: 2}}
+players: [{id: P1}, {id: P2}]
+kinds: {card: {base: object}}
+areas:
+  - {id: "hand-{player}", for_each: {player: players}, owner: "{player}", visibility: {face: owner}}
+  - {id: pile}
+objects:
+  - {id: "{player}-c{copy}", for_each: {player: players}, copies: 2, kind: card, owner: "{player}", start: "hand-{player}"}
+actions:
+  - {id: play, name: 出す, params: [{name: card, kind: card}], steps: [{op: move, obj: "{card}", to: pile}]}
+rules: [{id: R1, type: action, text: 自分の手札を出す。}]
+""", encoding="utf-8")
+    s = Session.create(tmp_path / "s", tmp_path / "d.yaml", 2, {}, 1)
+    capsys.readouterr()
+    main(["candidates", str(s.dir), "play", "--by", "P1"])
+    out = capsys.readouterr().out
+    assert "P1-c1" in out and "P2-c" not in out
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(str(s.dir)))
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    try:
+        url = f"http://127.0.0.1:{httpd.server_address[1]}/api/candidates?action=play&by=P1&param=card"
+        ids = {c["id"] for c in json.loads(urllib.request.urlopen(url).read())}
+    finally:
+        httpd.shutdown()
+    assert ids == {"P1-c1", "P1-c2"}
