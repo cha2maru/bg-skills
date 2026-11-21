@@ -26,7 +26,7 @@ sources:
 | 用途 | 使うもの | 置き場所 |
 |---|---|---|
 | 調査記録・知識 | okf@scaccogatto（[比較](/tooling/okf-plugins.md)） | `.okf/` |
-| bg-skills 自体の要望 → 要件 → 設計 | okf-specs | `specs/versions/v1/okf/`（案） |
+| bg-skills 自体の要望 → 要件 → 設計 | okf-specs | `specs/versions/v2/okf/`（案） |
 
 scaccogatto の `okf:okf` と名前が近く、曖昧な頼み方ではどちらが選ばれるか読みにくい。
 

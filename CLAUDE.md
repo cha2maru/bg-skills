@@ -13,7 +13,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 特定のゲーム専用の実装ではなく、複数のゲームを同じ抽象で表現できる設計を優先すること。
 
-概念の一覧と、再現できないもの・必要な概念の整理は `specs/versions/v1/okf/notes/concept-review.md`。概念モデル（原型 8 つと派生）と構造は `contracts/CTR-F-001.md` と `structure/`。定義に現れるものは、できる限りエリアとオブジェクトの派生（kinds の base）で表す（RUL-005）。
+概念の一覧と、再現できないもの・必要な概念の整理は `specs/versions/v2/okf/notes/concept-review.md`。概念モデル（原型 8 つと派生）と構造は `contracts/CTR-F-001.md` と `structure/`。定義に現れるものは、できる限りエリアとオブジェクトの派生（kinds の base）で表す（RUL-005）。
 
 形の盤（RUL-025）：親のエリアの `viewbox`（座標系）と子の `path`（SVG のパス。曲線・円弧・飛び地）で、ボードの絵の上の領域や実物の地図の州を描く（中身は `xy` に置く）。見栄えのための配置場所は子に `slot: true`（部品は親に置き、画面が 1 つずつ並べる。RUL-026）。画像：定義の `assets.root`（画像の置き場）と、エリアの `image`（背景）、部品・種類の `image`・`back_image`（`{default, "状態=値"}` で状態ごとに替えられる）。画面は `/assets/` で root の下だけを配る。惨劇RoopeR の再現（`local/tragedy-looper.yaml`、生成は `local/gen_tl.py`）は sangeki の惨劇コモンズ5th を指す（利用は惨劇RoopeR 関連に限る。公開時は「惨劇コモンズ作成：BakaFire・紺ノ玲」とリンクを表記）。
 
@@ -29,7 +29,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ルールの層（RUL-016。#31 を改めた）：
 - **ルールの文（`rules`）が正本**。エージェントもキーパーもまず文を読む。
-- **詳細ルール**（RUL-024）：審判用の総合ルールのように手引きには出さないが定義には要る文は、`rules` に `detail: true`。画面のルール欄ではたたみ、TTS には出さない。強さは詳細ルール＞手引きのルール＞裁定＞機械の層。整理は `specs/versions/v1/okf/notes/detail-rules/gates.md`。
+- **詳細ルール**（RUL-024）：審判用の総合ルールのように手引きには出さないが定義には要る文は、`rules` に `detail: true`。画面のルール欄ではたたみ、TTS には出さない。強さは詳細ルール＞手引きのルール＞裁定＞機械の層。整理は `specs/versions/v2/okf/notes/detail-rules/gates.md`。
 - **機械の層は、作品が選んで書いた分だけ**：条件（`require`・進行の区分と回数）、手順（`steps`・`on_start`・`on_end`・スタック）、終わり（`end_when` の結果・`scoring`）。参照・置き場・乱数・見え方は、どの作品でも機械で行う。
 - **裁定（`rulings`、RUL-017）は、文で決まらない点（ルールの穴）を決める**。1 件ごとに問い・裁定・理由・関わるルール・出典・重み（`authority`：official＞author＞designer＞keeper）・日付・見つかった対局を書く。決まっていない穴も `status: open` で書く（分かっている穴）。一般の原則は `principle: true`。sangeki の `wiki/notes/rulings.md` の書き方にならった。
 - 強さの順：ルールの文＞裁定＞機械の層。機械の層が文や裁定と食い違ったら、機械の層の不具合として直す。一次資料で明文が見つかったら、裁定のほうを直す。機械の層も裁定もない点は、キーパーが文で裁き、対局の裁定（`bg op` の ruling）に残す。`bg rulings <対局>` で定義へ持ち帰る候補が出る。`bg complexity` の `machine_layer` でルールごとの機械の層、`rules_text_only` で文だけのルールが分かる。
@@ -45,8 +45,9 @@ Claude Code のプラグインとして配る（RUL-021。`.claude-plugin/`、`b
 
 ## 仕様と記録
 
-- `specs/versions/v1/okf/`：okf-specs のバンドル（裁定 RUL、要望 WSH、要求 REQ、要件 SPC）。チェック：`python3 <okf-spec>/tools/okf_check.py specs/versions/v1/okf`
-- `specs/versions/v1/okf/notes/*/gates.md`：推奨案で決めた判断の記録
+- `specs/versions/v2/okf/`：okf-specs のバンドル（裁定 RUL、要望 WSH、要求 REQ、要件 SPC）。チェック：`python3 <okf-spec>/tools/okf_check.py specs/versions/v2/okf`
+- 版：`specs/versions/v1` は固めた版（`okf.yaml` の `frozen: true`。読むだけ・直さない）。作業中は `v2`（`base: ../../v1/okf`。差は `okf_check.py specs/versions/v2/okf changes`）
+- `specs/versions/v2/okf/notes/*/gates.md`：推奨案で決めた判断の記録
 - `.okf/`：調査記録（OKF。okf プラグイン）
 - 既存の商用ゲームの定義は公開しない（RUL-001 #37）。`local/` に置く（git 管理外）
 

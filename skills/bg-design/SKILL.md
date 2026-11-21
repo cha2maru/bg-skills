@@ -11,7 +11,7 @@ description: 新しいボードゲーム（カードゲーム・盤のゲーム�
 
 ## 前提
 
-- 形式の正本は `specs/versions/v1/okf/contracts/CTR-F-001.md`（フィールドの表と「派生」の表）。書く前に読む。
+- 形式の正本は `specs/versions/v2/okf/contracts/CTR-F-001.md`（フィールドの表と「派生」の表）。書く前に読む。
 - 似た作品の定義を 1 つ開いて手本にする：カードの効果とステータス `examples/beast-duel.yaml`、隠れた役職と発言 `examples/werewolf.yaml`、盤と駒 `examples/chess.yaml`、割り込み `tests/test_stack.py` の SPELLS、最小 `examples/tic-tac-toe.yaml`。
 - 既存の商用ゲームは `local/` に置き、公開しない（RUL-001 #37）。名前やキャラクターを写した作り直しはしない。
 
@@ -27,8 +27,8 @@ description: 新しいボードゲーム（カードゲーム・盤のゲーム�
    - 行為 → `actions`（`params` の `from`・`kind`・`require`、`steps` の `op`・`let`・`each`・`if`・`call`。結果を読む効果は `stepwise: true`）
    - 割り込み → アクションの `stack: true`、打ち消しは `cancel`。会話 → `say`（`--to`）、守られる約束 → `offer`。隠れた行為 → `secret: true`、夜の内緒話 → 段階の `whisper: hidden`
    - 何度も使う式 → `functions`。数える値 → `metrics`。知らせ → `signals`（プレイヤーに見せるなら `public: true`）
-   - 終わり → `flow.end_when` に `winners`・`losers`（式）か `draw` か `winners: scoring`（`flow.scoring` の得点と同点の比べ方）、`timing`（その巡を終えてからなら round_end）。自動で終えるなら `flow.auto_end: true`。手番の終わりの処理（手札の上限など）は手番の `on_end`。型ごとの書き方は `specs/versions/v1/okf/notes/endgame/gates.md`。得点の道（マスを進む駒）・即時得点・決まった時機の得点計算は `examples/harvest-road.yaml`。トークン（駒・キューブ・円盤）は種類の `shape`（round・disc・cube・pawn・tile）
-   - 遊ぶ人の手引きより細かい文（大会の総合ルール・審判用の決まり）は、`rules` に `detail: true` で書く（手引きに出さない。CTR-F-001 r4）。アクションの `rule` は、実装した詳細ルールの節を指す。手本は `specs/versions/v1/okf/notes/detail-rules/gates.md`
+   - 終わり → `flow.end_when` に `winners`・`losers`（式）か `draw` か `winners: scoring`（`flow.scoring` の得点と同点の比べ方）、`timing`（その巡を終えてからなら round_end）。自動で終えるなら `flow.auto_end: true`。手番の終わりの処理（手札の上限など）は手番の `on_end`。型ごとの書き方は `specs/versions/v2/okf/notes/endgame/gates.md`。得点の道（マスを進む駒）・即時得点・決まった時機の得点計算は `examples/harvest-road.yaml`。トークン（駒・キューブ・円盤）は種類の `shape`（round・disc・cube・pawn・tile）
+   - 遊ぶ人の手引きより細かい文（大会の総合ルール・審判用の決まり）は、`rules` に `detail: true` で書く（手引きに出さない。CTR-F-001 r4）。アクションの `rule` は、実装した詳細ルールの節を指す。手本は `specs/versions/v2/okf/notes/detail-rules/gates.md`
    - 盤の絵の上の領域・地図の州のように、直線の多角形（poly）で書きにくい形は、親に `viewbox`、子に `path`（SVG のパス）と `xy`（中身を置く位置）を書く（形の盤。CTR-F-001 r5）
    - 置き場の中の見栄えのための場所（1 つずつ置くマス・花びら）は、意味を持つ親の子に `slot: true` のエリアを並べる（部品は親に置く。上限は親の `capacity`）。準備で使うものを選び、残りを箱・ゲーム外にしまうルールは、部品を箱から始めて選ぶアクションで移す（notes/detail-rules/gates.md「準備の選択」）
    - 隠れた情報のある作品は `game.strict: true`（外れた行為を記録しない）

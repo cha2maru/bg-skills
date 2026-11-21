@@ -1,4 +1,4 @@
-"""受入基準（specs/versions/v1/okf/specifications）の機械で確かめられるもの。テスト名に AC の ID を入れる。"""
+"""受入基準（specs/versions/v2/okf/specifications）の機械で確かめられるもの。テスト名に AC の ID を入れる。"""
 import copy
 from pathlib import Path
 

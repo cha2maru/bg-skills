@@ -36,7 +36,7 @@ bg serve sessions/s1 --host 127.0.0.1                 # 卓の画面（認証な
 bg selfplay examples/rune-clash.yaml --players 2 --games 30
 ```
 
-コマンドの全体は [CLAUDE.md](CLAUDE.md) の「コマンド」の節、定義の形式は `specs/versions/v1/okf/contracts/CTR-F-001.md` と `bg schema`、手本の定義は `examples/`（三目並べ・オセロ・チェス・将棋・麻雀・人狼・架空のカードゲームなど）。
+コマンドの全体は [CLAUDE.md](CLAUDE.md) の「コマンド」の節、定義の形式は `specs/versions/v2/okf/contracts/CTR-F-001.md` と `bg schema`、手本の定義は `examples/`（三目並べ・オセロ・チェス・将棋・麻雀・人狼・架空のカードゲームなど）。
 
 ## 開発
 
