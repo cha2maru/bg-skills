@@ -17,7 +17,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 画像：定義の `assets.root`（画像の置き場）と、エリアの `image`（背景）、部品・種類の `image`・`back_image`（`{default, "状態=値"}` で状態ごとに替えられる）。画面は `/assets/` で root の下だけを配る。惨劇RoopeR の再現（`local/tragedy-looper.yaml`、生成は `local/gen_tl.py`）は sangeki の惨劇コモンズ5th を指す（利用は惨劇RoopeR 関連に限る。公開時は「惨劇コモンズ作成：BakaFire・紺ノ玲」とリンクを表記）。
 
-サンプル：`examples/` に三目並べ・かがり火・六角・オセロ・チェス（名前つきの式 `functions` でチェック）・将棋・麻雀・人狼・精霊獣デュエル（架空。カードの効果とステータス、アクションの `stepwise`）・ルーン決闘（架空。スタックで割り込む、アクションの `cost`）（古典は公開してよい）。`local/` に花火・ディプロマシー（生成 `local/gen_dip.py`）など市販品の再現。デモの対局は `local/social-demos.py` で作り直す。
+サンプル：`examples/` に三目並べ・かがり火・六角・オセロ・チェス（名前つきの式 `functions` でチェック）・将棋・麻雀・人狼・精霊獣デュエル（架空。カードの効果とステータス、アクションの `stepwise`）・ルーン決闘（架空。スタックで割り込む、アクションの `cost`）・収穫の道（架空。得点の道・即時得点・巡の終わりの得点・終わりの得点）（古典は公開してよい）。`local/` に花火・ディプロマシー（生成 `local/gen_dip.py`）など市販品の再現。デモの対局は `local/social-demos.py` で作り直す。
 
 終わり方（RUL-015、notes/endgame/gates.md）：`flow.end_when` の各件に `winners`・`losers`（式）・`draw`・`winners: scoring` と `timing`（now・turn_end・round_end）、`flow.auto_end` で結果を記録して終える、`flow.scoring`（by・tiebreak）で順位、手番の `on_end` で手番の終わりの処理。`bg complexity` でルールの複雑さの目安。
 

@@ -1,0 +1,179 @@
+format: bg-def/0.1
+game:
+  id: harvest-road
+  name: 収穫の道（架空のゲーム）
+  summary: >-
+    市場から作物を 1 枚取るたびに、その数だけ得点の道を進む（即時得点）。巡の終わりに、作物の色ごとの一番に
+    おまけの得点（決まった時機の得点計算）。山札が尽きた巡の終わりに、揃えた組の得点を足して比べる（終わりの得点計算）。
+    得点の表し方の手本：道の上の駒の位置が得点で、手順が駒を進める。
+  version: 1
+  players: {min: 2, max: 4}
+
+players:
+  - {id: P1, name: プレイヤー1, color: "#d0453a"}
+  - {id: P2, name: プレイヤー2, color: "#2f6fd0"}
+  - {id: P3, name: プレイヤー3, color: "#2e9a55"}
+  - {id: P4, name: プレイヤー4, color: "#d69a12"}
+
+kinds:
+  crop:
+    base: object
+    text: 作物の札。色（麦・豆・実）と数（1〜3）がある。
+    attributes:
+      title: {type: text}
+      color: {type: text, text: 麦・豆・実のどれか。}
+      value: {type: number, text: 取ったときに進むマスの数。}
+  marker:
+    base: object
+    shape: pawn
+    text: 得点の駒。道のマスの番号が、その人の得点。
+  cell:
+    base: area
+    text: 得点の道のマス。番号が得点。
+
+areas:
+  - id: track
+    name: 得点の道
+    text: 0〜29 のマスが卓の周りを回る。駒のあるマスの番号が得点（29 で止まる）。
+    areas:
+      - {id: s0, kind: cell, name: "0", pos: [0, 0]}
+      - {id: s1, kind: cell, name: "1", pos: [1, 0]}
+      - {id: s2, kind: cell, name: "2", pos: [2, 0]}
+      - {id: s3, kind: cell, name: "3", pos: [3, 0]}
+      - {id: s4, kind: cell, name: "4", pos: [4, 0]}
+      - {id: s5, kind: cell, name: "5", pos: [5, 0]}
+      - {id: s6, kind: cell, name: "6", pos: [6, 0]}
+      - {id: s7, kind: cell, name: "7", pos: [7, 0]}
+      - {id: s8, kind: cell, name: "8", pos: [8, 0]}
+      - {id: s9, kind: cell, name: "9", pos: [9, 0]}
+      - {id: s10, kind: cell, name: "10", pos: [10, 0]}
+      - {id: s11, kind: cell, name: "11", pos: [10, 1]}
+      - {id: s12, kind: cell, name: "12", pos: [10, 2]}
+      - {id: s13, kind: cell, name: "13", pos: [10, 3]}
+      - {id: s14, kind: cell, name: "14", pos: [10, 4]}
+      - {id: s15, kind: cell, name: "15", pos: [10, 5]}
+      - {id: s16, kind: cell, name: "16", pos: [9, 5]}
+      - {id: s17, kind: cell, name: "17", pos: [8, 5]}
+      - {id: s18, kind: cell, name: "18", pos: [7, 5]}
+      - {id: s19, kind: cell, name: "19", pos: [6, 5]}
+      - {id: s20, kind: cell, name: "20", pos: [5, 5]}
+      - {id: s21, kind: cell, name: "21", pos: [4, 5]}
+      - {id: s22, kind: cell, name: "22", pos: [3, 5]}
+      - {id: s23, kind: cell, name: "23", pos: [2, 5]}
+      - {id: s24, kind: cell, name: "24", pos: [1, 5]}
+      - {id: s25, kind: cell, name: "25", pos: [0, 5]}
+      - {id: s26, kind: cell, name: "26", pos: [0, 4]}
+      - {id: s27, kind: cell, name: "27", pos: [0, 3]}
+      - {id: s28, kind: cell, name: "28", pos: [0, 2]}
+      - {id: s29, kind: cell, name: "29", pos: [0, 1]}
+  - id: deck
+    name: 山札
+    ordered: true
+    visibility: {exists: all, count: all, face: none, order: none}
+  - id: market
+    name: 市場
+    text: 表向きの作物が 4 枚並ぶ。
+  - id: "field-{player}"
+    for_each: {player: players}
+    name: 畑
+    owner: "{player}"
+    text: 取った作物。表向き。
+
+table:
+  center: [track, deck, market]
+  per_player: ["field-{player}"]
+
+objects:
+  - id: "wheat{value}-{copy}"
+    kind: crop
+    for_each: {value: [1, 2, 3]}
+    copies: 3
+    attributes: {title: "麦 {value}", color: wheat, value: "{value}"}
+    start: deck
+  - id: "bean{value}-{copy}"
+    kind: crop
+    for_each: {value: [1, 2, 3]}
+    copies: 3
+    attributes: {title: "豆 {value}", color: bean, value: "{value}"}
+    start: deck
+  - id: "fruit{value}-{copy}"
+    kind: crop
+    for_each: {value: [1, 2, 3]}
+    copies: 3
+    attributes: {title: "実 {value}", color: fruit, value: "{value}"}
+    start: deck
+  - id: "marker-{player}"
+    for_each: {player: players}
+    kind: marker
+    owner: "{player}"
+    attributes: {title: "駒 {player}"}
+    start: s0
+
+functions:
+  score:  # 駒のあるマスの番号（得点）
+    params: [p]
+    expr: "next((i for i, c in enumerate(children('track')) if c == where('marker-' + p)), 0)"
+  cell:   # n 点のマス（29 で止まる）
+    params: [n]
+    expr: "children('track')[min(n, 29)]"
+  leader:  # その色を一番多く持つ人（1 人だけのとき。同数なら None）
+    params: [c]
+    expr: "first([p for p in players() if all(count_in('field-' + p, attr={'color': c}) > count_in('field-' + q, attr={'color': c}) for q in players() if q != p)])"
+  sets:   # 3 色が揃った組の数
+    params: [p]
+    expr: "min(count_in('field-' + p, attr={'color': c}) for c in ['wheat', 'bean', 'fruit'])"
+
+actions:
+  - id: setup
+    name: 準備する
+    rule: R1
+    steps:
+      - {op: shuffle, area: deck}
+      - {op: move, obj: "top:deck", to: market, times: 4}
+  - id: harvest
+    name: 作物を取る（すぐに進む）
+    rule: R2
+    params:
+      - {name: card, from: market, kind: crop}
+    let: {to: "cell(score(actor) + int(attr(card, 'value')))"}
+    steps:
+      - {op: move, obj: "{card}", to: "field-{actor}"}
+      - {op: move, obj: "marker-{actor}", to: "{to}"}
+      - if: "count_in('deck') > 0"
+        do:
+          - {op: move, obj: "top:deck", to: market}
+
+flow:
+  auto_end: true
+  scoring: {by: final, tiebreak: [score]}
+  stages:
+    - {id: setup, name: 準備, actions: [setup]}
+    - {id: main, name: 本番, order: seats, turn: main}
+  turns:
+    main:
+      phases:
+        - {id: act, name: 取る, main: [harvest], max: 1, required: true}
+      on_end:  # 巡の終わり（最後の席の手番の終わり）に、色ごとの一番が 2 マス進む（R3）
+        - if: "active() == players()[-1]"
+          do:
+            - each: players
+              do:
+                - let: {bonus: "2 * len([c for c in ['wheat', 'bean', 'fruit'] if leader(c) == player])"}
+                - if: "bonus > 0"
+                  do:
+                    - let: {to: "cell(score(player) + bonus)"}
+                    - {op: move, obj: "marker-{player}", to: "{to}", rule: R3}
+  end_when:
+    - {expr: "count_in('deck') == 0 and count_in('market') < 4", timing: round_end, winners: scoring, rule: R4,
+       text: 山札が尽きた（その巡を終えてから、終わりの得点で比べる。R4）}
+
+metrics:
+  - {id: score, name: 得点, badge: true, per: player, expr: "score(player)", refs: [R2, R3]}
+  - {id: sets, name: 組, per: player, expr: "sets(player)", refs: [R4]}
+  - {id: final, name: 終わりの得点, per: player, expr: "score(player) + 3 * sets(player)", refs: [R4]}
+
+rules:
+  - {id: R1, type: setup, text: 作物 27 枚を切って山札にし、4 枚を市場に表向きで並べる。駒はみな道の 0 に置く。P1 から。, refs: [crop, marker]}
+  - {id: R2, type: action, text: 手番に市場の作物を 1 枚取り、自分の畑に置く。すぐに、その数だけ自分の駒を道で進める（即時得点。29 で止まる）。山札から市場に 1 枚補う。, refs: [crop, marker, track]}
+  - {id: R3, type: turn, text: 全員が 1 回ずつ手番を行うたび（巡の終わり）に、色ごとに、その色の作物を一番多く持つ人（1 人だけのとき）が 2 マス進む。, refs: [crop, marker]}
+  - {id: R4, type: end, text: 山札が尽き、市場が 4 枚に満たなくなったら、その巡を終えて終わる。道の得点に、3 色が揃った組 1 つにつき 3 点を足して比べる（道では進めない）。同点なら道の得点の多い人。, refs: [crop]}

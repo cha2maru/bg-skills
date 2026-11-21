@@ -27,7 +27,7 @@ description: 新しいボードゲーム（カードゲーム・盤のゲーム�
    - 行為 → `actions`（`params` の `from`・`kind`・`require`、`steps` の `op`・`let`・`each`・`if`・`call`。結果を読む効果は `stepwise: true`）
    - 割り込み → アクションの `stack: true`、打ち消しは `cancel`。会話 → `say`（`--to`）、守られる約束 → `offer`。隠れた行為 → `secret: true`、夜の内緒話 → 段階の `whisper: hidden`
    - 何度も使う式 → `functions`。数える値 → `metrics`。知らせ → `signals`（プレイヤーに見せるなら `public: true`）
-   - 終わり → `flow.end_when` に `winners`・`losers`（式）か `draw` か `winners: scoring`（`flow.scoring` の得点と同点の比べ方）、`timing`（その巡を終えてからなら round_end）。自動で終えるなら `flow.auto_end: true`。手番の終わりの処理（手札の上限など）は手番の `on_end`。型ごとの書き方は `specs/versions/v1/okf/notes/endgame/gates.md`
+   - 終わり → `flow.end_when` に `winners`・`losers`（式）か `draw` か `winners: scoring`（`flow.scoring` の得点と同点の比べ方）、`timing`（その巡を終えてからなら round_end）。自動で終えるなら `flow.auto_end: true`。手番の終わりの処理（手札の上限など）は手番の `on_end`。型ごとの書き方は `specs/versions/v1/okf/notes/endgame/gates.md`。得点の道（マスを進む駒）・即時得点・決まった時機の得点計算は `examples/harvest-road.yaml`。トークン（駒・キューブ・円盤）は種類の `shape`（round・disc・cube・pawn・tile）
    - 隠れた情報のある作品は `game.strict: true`（外れた行為を記録しない）
 3. **ルールを書く**：`rules` に自然文で、ID（R1…）と `refs`（関係する部品・エリア・用語）を付ける。アクションの `rule` で結ぶ。機械で決めない判断（効果の解釈・裁定）は自然文に残す。
 4. **確かめる**（すべて通るまで直す）

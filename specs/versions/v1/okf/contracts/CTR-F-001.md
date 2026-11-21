@@ -105,7 +105,7 @@ implementation: []
 | assets | 辞書 | | root（画像の置き場。定義のファイルからの相対パス）・credit（画像の表記） | 表示の画像の置き場（RUL-006） |
 | game | 辞書 | ○ | id・name・summary・version・players{min,max}・open_questions・strict（対局の既定を厳格モードにする。bg new --lenient で外せる） | ゲームの見出しと未決 |
 | players | 並び | ○ | id・name・text・color（for_each・copies 可） | 原型：プレイヤー |
-| kinds | 辞書 | | base（area・object・ほかの種類）・text・name・states（値ごとに text と show{rotate,face}。値の並びの代わりに型 text・player・area・number を書くと書き込む状態）・show_state（いつも出す項目）・derived（部品ごとに局面から計算して見え方に出す値。式の self が部品。残り HP など）・attributes・capacity・ordered・fixture・uses・image・back_image・shape（round） | 種類。必ず area か object にたどり着く |
+| kinds | 辞書 | | base（area・object・ほかの種類）・text・name・states（値ごとに text と show{rotate,face}。値の並びの代わりに型 text・player・area・number を書くと書き込む状態）・show_state（いつも出す項目）・derived（部品ごとに局面から計算して見え方に出す値。式の self が部品。残り HP など）・attributes・capacity・ordered・fixture・uses・image・back_image・shape（round・disc・cube・pawn・tile。トークンの形。card か無しはカード） | 種類。必ず area か object にたどり着く |
 | areas | 並び | ○ | id・kind・name・owner・visibility{exists,count,face,order。値は all・owner・others・none・席の並び}・ordered・capacity・on_enter・areas（入れ子）・layout{grid・hex}・pos・xy・rect（親の中の [x, y, 幅, 高さ] の割合）・poly（親の中の多角形の頂点の割合。複雑な形）・color（塗り）・aspect（絵のないときの縦横比）・image（背景）・folded（画面で最初にたたむ） | 原型：エリア |
 | objects | 並び | | id・kind・count・copies・for_each・attributes・owner・start・start_state・image・back_image（文字列か {default, "状態=値"}） | 原型：オブジェクト |
 | links | 並び | | between・type | 原型：リンク |

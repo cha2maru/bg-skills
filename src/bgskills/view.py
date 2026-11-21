@@ -55,6 +55,9 @@ def _item(d, state, obj, player, vis, owner, meaning):
     if isinstance(obj, dict):
         (part, n), = obj.items()
         it = {"id": part, "kind": d.parts[part].get("kind"), "count": n}  # 種類の名前を添える（意味は凡例）
+        shape = next((d.kinds[k]["shape"] for k in d.kind_chain(d.parts[part].get("kind")) if d.kinds[k].get("shape")), None)
+        if shape:
+            it["shape"] = shape  # 数える部品の形（トークンの見た目。RUL-023）
         if d.image(part):
             it["image"] = d.image(part)
         if meaning and d.parts[part].get("text"):

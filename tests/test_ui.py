@@ -537,3 +537,22 @@ def test_turn_seat_recent_move_and_card_face(tmp_path, browser):
     assert page.locator(".card .bignum").count() >= 1
     page.close()
     httpd.shutdown()
+
+
+def test_cards_and_tokens_look_different(tmp_path, browser):
+    """カードとトークン（RUL-023）：種類の shape（pawn など）を持つ部品は立体の駒、持ち主の色で塗る。数える部品には形の印。
+    得点の道（マスの多い盤）は小さなマスで描く。"""
+    s = Session.create(tmp_path / "h", EX / "harvest-road.yaml", 2, {}, 7)
+    s.act("setup", "keeper")
+    httpd, url = _serve(s.dir)
+    page = browser.new_page(viewport={"width": 1440, "height": 900})
+    page.goto(url)
+    page.wait_for_timeout(1500)
+    pawn = page.locator("[data-obj=marker-P1]")
+    assert "shape-pawn" in pawn.get_attribute("class") and "token" in pawn.get_attribute("class")
+    assert page.evaluate("getComputedStyle(document.querySelector('[data-obj=marker-P1]')).getPropertyValue('--kind').trim()") == "#d0453a"
+    card = page.locator("[data-area=market] .card").first
+    assert "token" not in card.get_attribute("class")
+    assert page.locator(".kids.grid.dense").count() == 1
+    page.close()
+    httpd.shutdown()

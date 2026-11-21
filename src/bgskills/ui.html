@@ -242,6 +242,23 @@ header label{font-size:12px}
 .stackwrap>.tokens>.chip{font-size:10px;padding:0 5px;box-shadow:0 1px 3px rgba(0,0,0,.25);white-space:nowrap;max-width:none}
 .stackwrap>.tokens>.card.round{width:22px;height:22px}
 .items.fan>.stackwrap+.card,.items.fan>.card+.stackwrap{margin-left:-20px}
+/* カードとトークンの見た目（RUL-023）：カードは紙の札、トークンは立体の駒（形は種類の shape） */
+.card:not(.img):not(.round):not(.hidden){background:linear-gradient(180deg,var(--card),color-mix(in srgb,var(--card) 90%,#777));box-shadow:0 1px 2px rgba(0,0,0,.22)}
+.card.token:not(.img){--kind:#8a8f98;background:radial-gradient(circle at 35% 30%,color-mix(in srgb,var(--kind) 55%,#fff) 0,var(--kind) 55%,color-mix(in srgb,var(--kind) 70%,#000) 100%);color:#fff;text-shadow:0 1px 1px rgba(0,0,0,.5);border:1px solid color-mix(in srgb,var(--kind) 60%,#000);box-shadow:0 2px 3px rgba(0,0,0,.35)}
+.card.token.shape-cube{border-radius:4px;width:22px;height:22px;box-shadow:2px 2px 0 color-mix(in srgb,var(--kind) 60%,#000),0 3px 4px rgba(0,0,0,.3)}
+.card.token.shape-tile{border-radius:6px;width:36px;height:36px}
+.card.token.shape-pawn{width:22px;height:30px;border-radius:50% 50% 5px 5px/38% 38% 5px 5px}
+.card.token.shape-cube>div:first-child,.card.token.shape-pawn>div:first-child{display:none}
+.tokicon{display:inline-block;width:12px;height:12px;border-radius:50%;background:radial-gradient(circle at 35% 30%,color-mix(in srgb,var(--kind) 55%,#fff),var(--kind) 60%,color-mix(in srgb,var(--kind) 70%,#000));box-shadow:0 1px 2px rgba(0,0,0,.35);flex:none}
+.tokicon.shape-cube,.tokicon.shape-tile{border-radius:2px}
+.tokicon.shape-pawn{width:10px;height:13px;border-radius:50% 50% 2px 2px/38% 38% 2px 2px}
+.chip{box-shadow:0 1px 2px rgba(0,0,0,.15)}
+.kids.grid.dense{gap:2px}
+.kids.grid.dense>.area{padding:1px 2px;min-height:34px;min-width:0}
+.kids.grid.dense>.area>.head{font-size:10px;gap:2px}
+.kids.grid.dense>.area>.head .fold,.kids.grid.dense>.area .empty{display:none}
+.kids.grid.dense>.area>.items{min-height:0;gap:1px;flex-wrap:wrap}
+.kids.grid.dense .card.token.shape-pawn{width:14px;height:19px}
 /* 見やすさ（RUL-022） */
 .card:not(.img):not(.round):not(.hidden){border-top:4px solid var(--kind, var(--card-line))}
 .card .bignum{position:absolute;right:4px;bottom:2px;font-size:22px;font-weight:700;line-height:1;opacity:.85;pointer-events:none}
@@ -347,13 +364,15 @@ function itemEl(it, container) {
   if ("count" in it) {
     const chip = h("span", {class: "chip" + (it.image ? " img" : ""), title: `${it.kind} ×${it.count}` + (it.meaning ? "：" + it.meaning : ""),
       onpointerdown: e => grab(e, {obj: it.id, from: container, counted: true}, () => select({type: "item", id: it.id, container, item: it}))},
+      it.image ? null : h("span", {class: `tokicon shape-${it.shape || "round"}`, style: `--kind:${kindColor(it.kind || it.id)}`}),
       (DEF.kinds[it.kind] || {}).name || (it.kind && it.kind !== it.id ? `${it.kind}` : it.id), h("span", {class: "count"}, "×" + (it.count === "unlimited" ? "∞" : it.count)));
     if (it.image) chip.style.backgroundImage = `url("/assets/${encodeURI(it.image)}")`;
     return chip;
   }
   const disp = it.display || {rotate: 0, face: "up"};          // 状態の表示方法（SPC-038）
   const down = disp.face === "down", side = disp.rotate % 180 === 90;
-  const cls = ["card", down && "down", side && "side", it.image && "img", it.shape === "round" && "round", it.stacked && it.stacked.length && "has-stack", SEL && SEL.id === it.id && "sel"].filter(Boolean).join(" ");
+  const token = isToken(it);
+  const cls = ["card", down && "down", side && "side", it.image && "img", token && `round token shape-${it.shape}`, it.stacked && it.stacked.length && "has-stack", SEL && SEL.id === it.id && "sel"].filter(Boolean).join(" ");
   const card = h("div", {class: cls, "data-obj": it.id, "data-in": container, title: [it.title, ...Object.entries(it.attributes || {}).filter(([, v]) => typeof v !== "object").map(([k, v]) => `${k}: ${v}`), it.meaning].filter(Boolean).join("\n"),
       onpointerdown: e => grab(e, {obj: it.id, from: container}, () => select({type: "item", id: it.id, container, item: it}))},
     h("div", {}, it.title || it.kind || ""), h("div", {class: "cid"}, it.id),
@@ -364,19 +383,19 @@ function itemEl(it, container) {
     overlap(it) ? null : stackEl(it, it.id), h("span", {class: "orient", title: `回転 ${disp.rotate}°・${{up: "表", down: "裏", held: "手札"}[disp.face] || disp.face}`},
       `${side ? "横" : "縦"} ${ARROW[disp.rotate] || "↑"}`));
   if (it.image) card.style.backgroundImage = `url("/assets/${encodeURI(it.image)}")`;
-  else if (it.kind && it.shape !== "round") card.style.setProperty("--kind", kindColor(it.kind)); // 種類ごとの色の帯
+  else if (it.kind) card.style.setProperty("--kind", kindColor(it.kind)); // 種類ごとの色（カードは上端の帯、トークンは塗り）
   const big = bigNumber(it);
-  if (big && !it.image && it.shape !== "round") card.append(h("span", {class: "bignum", title: big[0]}, big[1]));
+  if (big && !it.image && !token) card.append(h("span", {class: "bignum", title: big[0]}, big[1]));
   if (RECENT.has(it.id)) card.classList.add("recent");
   const pc = it.owner && (DEF.players.find(p => p.id === it.owner) || {}).color; // 持ち主の色（定義の players[].color）
-  if (pc && !it.image) { card.style.borderColor = pc; card.style.boxShadow = `inset 0 0 0 2px ${pc}`; if (it.shape === "round") { card.style.background = pc; card.style.color = "#fff"; } }
+  if (pc && !it.image) { card.style.borderColor = pc; card.style.boxShadow = `inset 0 0 0 2px ${pc}`; if (token) { card.style.setProperty("--kind", pc); card.style.boxShadow = ""; } }
   return overlap(it) ? overlapEl(it, card, side) : card;
 }
 // 重なっている物を、重なった形で出す（RUL-020。表示だけ）：重ねたカードは本体の下に少しずつずらしてのぞかせ、
 // 数える部品・丸い駒は本体の右肩に載せる。「表示」の「重なりを一覧で出す」なら、これまでのカードの中の一覧
 const overlap = it => it.stacked && it.stacked.length && !document.body.classList.contains("show-stacklist");
 function overlapEl(it, card, side) {
-  const tokens = it.stacked.filter(x => "count" in x || x.shape === "round");
+  const tokens = it.stacked.filter(x => "count" in x || isToken(x));
   const unders = it.stacked.filter(x => !tokens.includes(x));
   const STEP = 15, W = side ? 90 : 64, H = side ? 64 : 90;
   const wrap = h("div", {class: "stackwrap", title: `${it.title || it.id} に重なっている：${it.stacked.length}`});
@@ -393,6 +412,8 @@ function overlapEl(it, card, side) {
   if (tokens.length) wrap.append(h("div", {class: "tokens"}, tokens.map(x => itemEl(x, it.id))));
   return wrap;
 }
+// カードかトークンか：種類の shape（round・disc・cube・pawn・tile）があればトークン。card か無ければカード（RUL-023）
+const isToken = it => !!it.shape && it.shape !== "card";
 // 種類の色：種類の ID から決まる色相（同じ種類はいつも同じ色。表示だけ）
 function kindColor(k) { let x = 0; for (const c of k) x = (x * 31 + c.charCodeAt(0)) % 360; return `hsl(${x} 55% 52%)`; }
 // カードの大きな数：属性 value（なければ最初の数の属性）。数のときだけ
@@ -473,7 +494,7 @@ function areaEl(a) {
   else if (Array.isArray(v.shown)) {
     v.shown.forEach(it => items.append(itemEl(it, a.id)));
     if (!v.shown.length && !kids.length) items.append(h("span", {class: "empty"}, "空")); // 子エリアだけの入れ物には出さない
-    const cards = v.shown.filter(it => !("count" in it) && it.shape !== "round" && !(it.stacked && it.stacked.length)).length;
+    const cards = v.shown.filter(it => !("count" in it) && !isToken(it) && !(it.stacked && it.stacked.length)).length;
     if (cards > 7 || (a.ordered && cards > 5)) items.classList.add("fan"); // 枚数の多い置き場（山札など）は重ねて並べる（表示だけ）
   }
   else if (v.shown && "count" in v.shown) backs(items, v.shown.count, a.ordered, Object.values(v.hidden || {})[0]);
@@ -534,8 +555,9 @@ function areaEl(a) {
     if (outline.childNodes.length) wrap.append(outline);
     box.append(wrap);
   } else if (kids.length) {
-    const wrap = h("div", {class: "kids" + (gridKids ? " grid" : "")});
-    if (gridKids) wrap.style.gridTemplateColumns = `repeat(${Math.max(...kids.map(k => k.pos[0])) + 1}, minmax(${kids.length > 30 ? 44 : 90}px, 1fr))`;
+    const dense = gridKids && kids.length >= 20; // マスの多い盤（得点の道など）は小さなマスに（RUL-023）
+    const wrap = h("div", {class: "kids" + (gridKids ? " grid" : "") + (dense ? " dense" : "")});
+    if (gridKids) wrap.style.gridTemplateColumns = `repeat(${Math.max(...kids.map(k => k.pos[0])) + 1}, minmax(${dense ? 34 : 90}px, 1fr))`;
     for (const k of kids) {
       const el = areaEl(k);
       if (gridKids) { el.style.gridColumn = k.pos[0] + 1; el.style.gridRow = k.pos[1] + 1; }
