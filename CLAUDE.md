@@ -37,6 +37,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - プレイヤーに出すものは、局面なら `view.py`、記録なら `redact.py` を必ず通す。出口（コマンド・画面の API）を足したら `tests/test_leaks.py` に足す。
 - 機械の層をどれだけ強く効かせるかは対局ごとに選ぶ：警告だけ（既定）か、厳格モード（外れた行為を記録しない。`game.strict` で作品の既定にできる）。
 
+Python なしで使える範囲と考え方は `docs/without-python.md`、形式の JSON Schema は `docs/bg-def.schema.json`（`uv run bg schema > docs/bg-def.schema.json` で作り直す。形式を変えたら作り直す）。
+
 ## スキル（skills/。.claude/skills はそのリンク）
 
 Claude Code のプラグインとして配る（RUL-021。`.claude-plugin/`、`bin/bg`、README.md）。確かめ：`claude plugin validate .`。

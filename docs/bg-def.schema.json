@@ -1,0 +1,544 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "title": "bg-skills game definition (CTR-F-001 r7)",
+ "$defs": {
+  "step": {
+   "type": "object",
+   "properties": {
+    "area": {},
+    "args": {},
+    "as": {},
+    "at": {},
+    "call": {},
+    "decision": {},
+    "do": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/step"
+     }
+    },
+    "draw": {},
+    "each": {},
+    "else": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/step"
+     }
+    },
+    "expr": {},
+    "facing": {},
+    "field": {},
+    "fields": {},
+    "from": {},
+    "if": {},
+    "into": {},
+    "into_kind": {},
+    "key": {},
+    "kind": {},
+    "let": {},
+    "n": {},
+    "obj": {},
+    "offer": {},
+    "op": {},
+    "order": {},
+    "owner": {},
+    "parts": {},
+    "player": {},
+    "question": {},
+    "reply_to": {},
+    "results": {},
+    "rule": {},
+    "skip": {},
+    "target": {},
+    "text": {},
+    "times": {},
+    "to": {},
+    "until": {},
+    "value": {},
+    "winner": {},
+    "winners": {}
+   },
+   "additionalProperties": false
+  },
+  "area": {
+   "type": "object",
+   "properties": {
+    "areas": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/area"
+     }
+    },
+    "aspect": {},
+    "capacity": {},
+    "color": {},
+    "folded": {},
+    "for_each": {},
+    "id": {},
+    "image": {},
+    "kind": {},
+    "layout": {},
+    "name": {},
+    "on_enter": {},
+    "ordered": {},
+    "owner": {},
+    "path": {},
+    "poly": {},
+    "pos": {},
+    "rect": {},
+    "slot": {},
+    "text": {},
+    "viewbox": {},
+    "visibility": {},
+    "xy": {}
+   },
+   "additionalProperties": false
+  }
+ },
+ "type": "object",
+ "properties": {
+  "actions": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "properties": {
+     "by": {},
+     "cost": {
+      "type": "array",
+      "items": {
+       "$ref": "#/$defs/step"
+      }
+     },
+     "during_stack": {},
+     "id": {},
+     "let": {},
+     "name": {},
+     "params": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "properties": {
+        "choices": {},
+        "free": {},
+        "from": {},
+        "in": {},
+        "kind": {},
+        "name": {},
+        "owner": {},
+        "pick": {},
+        "players": {},
+        "require": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "properties": {
+           "any": {},
+           "empty": {},
+           "expr": {},
+           "has": {},
+           "linked": {},
+           "not": {},
+           "text": {}
+          },
+          "additionalProperties": false
+         }
+        },
+        "stack": {},
+        "text": {}
+       },
+       "additionalProperties": false
+      }
+     },
+     "require": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "properties": {
+        "any": {},
+        "empty": {},
+        "expr": {},
+        "has": {},
+        "linked": {},
+        "not": {},
+        "text": {}
+       },
+       "additionalProperties": false
+      }
+     },
+     "rule": {},
+     "secret": {},
+     "stack": {},
+     "steps": {
+      "type": "array",
+      "items": {
+       "$ref": "#/$defs/step"
+      }
+     },
+     "stepwise": {},
+     "text": {},
+     "when": {}
+    },
+    "additionalProperties": false
+   }
+  },
+  "areas": {
+   "type": "array",
+   "items": {
+    "$ref": "#/$defs/area"
+   }
+  },
+  "assets": {},
+  "flow": {
+   "type": "object",
+   "properties": {
+    "auto_end": {},
+    "cycle": {},
+    "end_when": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "draw": {},
+       "expr": {},
+       "losers": {},
+       "public": {},
+       "rule": {},
+       "text": {},
+       "timing": {},
+       "winners": {}
+      },
+      "additionalProperties": false
+     }
+    },
+    "offer_action": {},
+    "scoring": {
+     "type": "object",
+     "properties": {
+      "by": {},
+      "low": {},
+      "tiebreak": {}
+     },
+     "additionalProperties": false
+    },
+    "signals": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "draw": {},
+       "expr": {},
+       "losers": {},
+       "public": {},
+       "rule": {},
+       "text": {},
+       "timing": {},
+       "winners": {}
+      },
+      "additionalProperties": false
+     }
+    },
+    "stack": {},
+    "stages": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "actions": {},
+       "from_box_only": {},
+       "id": {},
+       "name": {},
+       "on_end": {
+        "type": "array",
+        "items": {
+         "$ref": "#/$defs/step"
+        }
+       },
+       "on_start": {
+        "type": "array",
+        "items": {
+         "$ref": "#/$defs/step"
+        }
+       },
+       "order": {},
+       "talk": {},
+       "talk_text": {},
+       "turn": {},
+       "turns": {},
+       "whisper": {}
+      },
+      "additionalProperties": false
+     }
+    },
+    "turns": {
+     "type": "object",
+     "additionalProperties": {
+      "type": "object",
+      "properties": {
+       "free": {
+        "type": "array",
+        "items": {
+         "type": "object",
+         "properties": {
+          "action": {},
+          "max": {},
+          "phases": {}
+         },
+         "additionalProperties": false
+        }
+       },
+       "on_end": {
+        "type": "array",
+        "items": {
+         "$ref": "#/$defs/step"
+        }
+       },
+       "on_start": {
+        "type": "array",
+        "items": {
+         "$ref": "#/$defs/step"
+        }
+       },
+       "phases": {
+        "type": "array",
+        "items": {
+         "type": "object",
+         "properties": {
+          "auto": {},
+          "by": {},
+          "each": {},
+          "id": {},
+          "main": {},
+          "max": {},
+          "name": {},
+          "pass": {},
+          "per_player": {},
+          "required": {},
+          "sequence": {},
+          "talk": {},
+          "talk_text": {},
+          "whisper": {}
+         },
+         "additionalProperties": false
+        }
+       },
+       "reactions": {
+        "type": "array",
+        "items": {
+         "type": "object",
+         "properties": {
+          "action": {},
+          "max": {},
+          "phases": {}
+         },
+         "additionalProperties": false
+        }
+       }
+      },
+      "additionalProperties": false
+     }
+    }
+   },
+   "additionalProperties": false
+  },
+  "format": {},
+  "functions": {
+   "type": "object",
+   "additionalProperties": {
+    "type": "object",
+    "properties": {
+     "expr": {},
+     "params": {}
+    },
+    "additionalProperties": false
+   }
+  },
+  "game": {
+   "type": "object",
+   "properties": {
+    "id": {},
+    "name": {},
+    "open_questions": {},
+    "players": {},
+    "sources": {},
+    "strict": {},
+    "summary": {},
+    "version": {}
+   },
+   "additionalProperties": false
+  },
+  "groups": {},
+  "kinds": {
+   "type": "object",
+   "additionalProperties": {
+    "type": "object",
+    "properties": {
+     "attributes": {},
+     "back_image": {},
+     "base": {},
+     "capacity": {},
+     "derived": {},
+     "distinct": {},
+     "fixture": {},
+     "image": {},
+     "name": {},
+     "ordered": {},
+     "shape": {},
+     "show_state": {},
+     "source": {},
+     "states": {},
+     "text": {},
+     "uses": {}
+    },
+    "additionalProperties": false
+   }
+  },
+  "layout": {},
+  "links": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "properties": {
+     "between": {},
+     "text": {},
+     "type": {}
+    },
+    "additionalProperties": false
+   }
+  },
+  "metrics": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "properties": {
+     "badge": {},
+     "count": {},
+     "expr": {},
+     "id": {},
+     "name": {},
+     "needs": {},
+     "per": {},
+     "refs": {},
+     "sum": {},
+     "visible": {}
+    },
+    "additionalProperties": false
+   }
+  },
+  "objects": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "properties": {
+     "attributes": {},
+     "back_image": {},
+     "copies": {},
+     "count": {},
+     "for_each": {},
+     "id": {},
+     "image": {},
+     "kind": {},
+     "name": {},
+     "owner": {},
+     "start": {},
+     "start_state": {}
+    },
+    "additionalProperties": false
+   }
+  },
+  "players": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "properties": {
+     "color": {},
+     "copies": {},
+     "for_each": {},
+     "id": {},
+     "name": {},
+     "team": {},
+     "text": {}
+    },
+    "additionalProperties": false
+   }
+  },
+  "progress": {
+   "type": "object",
+   "additionalProperties": {
+    "type": "object",
+    "properties": {
+     "refs": {},
+     "start": {},
+     "text": {}
+    },
+    "additionalProperties": false
+   }
+  },
+  "rules": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "properties": {
+     "detail": {},
+     "id": {},
+     "refs": {},
+     "seat": {},
+     "source": {},
+     "text": {},
+     "type": {}
+    },
+    "additionalProperties": false
+   }
+  },
+  "rulings": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "properties": {
+     "authority": {},
+     "by": {},
+     "date": {},
+     "decision": {},
+     "engine": {},
+     "found_in": {},
+     "id": {},
+     "principle": {},
+     "question": {},
+     "reason": {},
+     "refs": {},
+     "rules": {},
+     "sources": {},
+     "status": {},
+     "supersedes": {}
+    },
+    "additionalProperties": false
+   }
+  },
+  "table": {},
+  "teams": {
+   "type": "object",
+   "additionalProperties": {
+    "type": "object",
+    "properties": {
+     "name": {},
+     "text": {}
+    },
+    "additionalProperties": false
+   }
+  },
+  "terms": {
+   "type": "object",
+   "additionalProperties": {
+    "type": "object",
+    "properties": {
+     "avoid": {},
+     "first": {},
+     "refs": {},
+     "text": {},
+     "word": {}
+    },
+    "additionalProperties": false
+   }
+  }
+ },
+ "additionalProperties": false
+}

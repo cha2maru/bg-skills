@@ -2,18 +2,20 @@
 
 ボードゲームを構成する情報（部品・置き場・状態・ルール・手番の進行・隠れた情報）を YAML の定義に書き、その定義を `bg` コマンドで操作できる汎用の環境。エージェントが、新しいゲームの設計とテストプレイ、既存のゲームの試し遊び、多数局のシミュレーションによるバランス調整を行えるようにする。Claude Code のプラグインとして入れると、スキルと `bg` コマンドがどのプロジェクトでも使える。
 
-## 入れる
+> **開発中**です。Claude Code のプラグインとしての配布（マーケットプレイス）は、まだしていません。
 
-このリポジトリがマーケットプレイスになっている。Claude Code で次を実行する（ローカルの clone なら、URL の代わりにフォルダのパス）。
+## 使い始める
 
+```bash
+git clone <このリポジトリ>
+cd bg-skills
+uv sync                      # uv が Python と依存（PyYAML）を用意する
+uv run bg check examples/tic-tac-toe.yaml
 ```
-/plugin marketplace add <このリポジトリの git の URL か、clone したフォルダ>
-/plugin install bg-skills@bg-skills
-```
 
-- 1 回だけ試すなら `claude --plugin-dir <clone したフォルダ>`。
-- 要るもの：[uv](https://docs.astral.sh/uv/)（Python 3.11 以上は uv が用意する）。最初の `bg` の実行で、プラグインのフォルダに依存（PyYAML）が入る。
-- 画面のテストを動かすときだけ playwright（`uv run --with playwright ...`）。
+- 要るもの：[uv](https://docs.astral.sh/uv/)。画面のテストを動かすときだけ playwright（`uv run --with playwright ...`）。
+- Claude Code でスキルごと試すなら：`claude --plugin-dir <clone したフォルダ>`（`.claude-plugin/` と `skills/`、`bin/bg` がそのまま使える）。
+- **Python を入れずに使える範囲と考え方**は [docs/without-python.md](docs/without-python.md)。定義の形式は [docs/bg-def.schema.json](docs/bg-def.schema.json)（JSON Schema。エディタの補完・確かめに）と `specs/versions/v2/okf/contracts/CTR-F-001.md`。
 
 ## 自分のゲームを作る（導入から改訂まで）
 
