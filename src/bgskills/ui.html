@@ -279,6 +279,13 @@ header label{font-size:12px}
 .vbbox .card.token{width:18px;height:18px}
 .vbbox .chip{font-size:10px;padding:0 4px}
 .onimg .vbbox>.head{opacity:.75}
+.vbcell.slot{fill:rgba(255,255,255,0);stroke:rgba(255,255,255,0)}
+.vbcell.slot:hover,.vbcell.slot.drop{fill:rgba(255,230,120,.3);stroke:#d89b00}
+.slotpos{position:absolute;transform:translate(-50%,-50%);pointer-events:none}
+.slotpos>*{pointer-events:auto}
+.slotpos .tokicon{width:16px;height:16px;cursor:grab}
+.slotpos .card{width:22px;height:30px;font-size:8px}
+.slotcount{display:block;text-align:center;font-size:10px;background:rgba(255,255,255,.7);border-radius:6px;padding:0 4px;margin:1px auto 0;width:max-content}
 /* 見やすさ（RUL-022） */
 .card:not(.img):not(.round):not(.hidden){border-top:4px solid var(--kind, var(--card-line))}
 .card .bignum{position:absolute;right:4px;bottom:2px;font-size:22px;font-weight:700;line-height:1;opacity:.85;pointer-events:none}
@@ -940,7 +947,9 @@ function shapeBoard(a, box) {
   const shaped = [];
   const walk = list => list.forEach(k => { if (d(k)) shaped.push(k); walk(k.areas || []); });
   walk(a.areas || []);
-  const boxes = [];
+  const boxes = [], slotsOf = {}, parentOf = {};
+  const walkP = (list, par) => list.forEach(k => { parentOf[k.id] = par; walkP(k.areas || [], k); });
+  walkP(a.areas || [], a);
   for (const k of shaped) {
     const pe = document.createElementNS(NS, "path");
     pe.setAttribute("d", d(k)); pe.setAttribute("data-area", k.id);
@@ -949,13 +958,51 @@ function shapeBoard(a, box) {
     const tt = document.createElementNS(NS, "title"); tt.textContent = k.name || k.id; pe.append(tt);
     pe.addEventListener("click", () => select({type: "area", id: k.id, area: k}));
     svg.append(pe);
+    if (k.slot) { const par = parentOf[k.id]; (slotsOf[par.id] = slotsOf[par.id] || {par, list: []}).list.push([k, pe]); pe.classList.add("slot"); continue; }
     const el = areaEl(k, true); el.classList.add("vbbox");
     if (k.xy) { el.style.left = (k.xy[0] - vx) / vw * 100 + "%"; el.style.top = (k.xy[1] - vy) / vh * 100 + "%"; }
     boxes.push([el, pe, k]);
   }
+  // 形のない親（意味だけのエリア）は、名前と、配置場所に入りきらない分の箱を xy に出す
+  for (const {par} of Object.values(slotsOf)) if (!d(par) && par.id !== a.id) {
+    const el = areaEl(par, true); el.classList.add("vbbox");
+    if (par.xy) { el.style.left = (par.xy[0] - vx) / vw * 100 + "%"; el.style.top = (par.xy[1] - vy) / vh * 100 + "%"; }
+    boxes.push([el, null, par]);
+  }
   wrap.append(svg, ...boxes.map(b => b[0]));
+  // 配置場所（slot。RUL-026）：親の部品を 1 つずつ配置場所に並べる。数える部品は 1 個ずつの駒にする。入りきらない分は親の箱に残す
+  const slotted = [];
+  for (const {par, list} of Object.values(slotsOf)) {
+    const v = VIEW.areas[par.id], shown = v && Array.isArray(v.shown) ? v.shown : [];
+    const units = [];
+    for (const it of shown) {
+      if ("count" in it) { const n = it.count === "unlimited" ? list.length : it.count; for (let i = 0; i < n; i++) units.push({it, counted: true}); }
+      else units.push({it});
+    }
+    const pbox = boxes.find(b => b[2].id === par.id);
+    units.slice(0, list.length).forEach((u, i) => {
+      const el = u.counted
+        ? h("span", {class: `slottok tokicon shape-${u.it.shape || "round"}`, title: (DEF.kinds[u.it.kind] || {}).name || u.it.id,
+            style: `--kind:${kindColor(u.it.kind || u.it.id)}`, "data-in": par.id,
+            onpointerdown: e => grab(e, {obj: u.it.id, from: par.id, counted: true}, () => select({type: "area", id: par.id, area: par}))})
+        : itemEl(u.it, par.id);
+      const holder = h("div", {class: "slotpos"}, el);
+      const [k, pe] = list[i];
+      if (k.xy) { holder.style.left = (k.xy[0] - vx) / vw * 100 + "%"; holder.style.top = (k.xy[1] - vy) / vh * 100 + "%"; }
+      else slotted.push([holder, pe]);
+      wrap.append(holder);
+    });
+    if (pbox) { // 親の箱には、名前と入りきらない数だけ
+      const items = pbox[0].querySelector(".items"); if (items) items.remove();
+      const over = units.length - list.length;
+      pbox[0].append(h("span", {class: "slotcount", title: "配置場所の数 / 置いてある数"}, `${Math.min(units.length, list.length)}/${list.length}` + (over > 0 ? ` +${over}` : "")));
+    }
+  }
+  requestAnimationFrame(() => {
+    for (const [el, pe] of slotted) { const b = pe.getBBox(); el.style.left = (b.x + b.width / 2 - vx) / vw * 100 + "%"; el.style.top = (b.y + b.height / 2 - vy) / vh * 100 + "%"; }
+  });
   requestAnimationFrame(() => { // 位置のない箱は形の中心へ（描いてから測る）
-    for (const [el, pe, k] of boxes) if (!k.xy) {
+    for (const [el, pe, k] of boxes) if (!k.xy && pe) {
       const b = pe.getBBox(); el.style.left = (b.x + b.width / 2 - vx) / vw * 100 + "%"; el.style.top = (b.y + b.height / 2 - vy) / vh * 100 + "%";
     }
   });

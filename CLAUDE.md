@@ -15,7 +15,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 概念の一覧と、再現できないもの・必要な概念の整理は `specs/versions/v1/okf/notes/concept-review.md`。概念モデル（原型 8 つと派生）と構造は `contracts/CTR-F-001.md` と `structure/`。定義に現れるものは、できる限りエリアとオブジェクトの派生（kinds の base）で表す（RUL-005）。
 
-形の盤（RUL-025）：親のエリアの `viewbox`（座標系）と子の `path`（SVG のパス。曲線・円弧・飛び地）で、ボードの絵の上の領域や実物の地図の州を描く（中身は `xy` に置く）。画像：定義の `assets.root`（画像の置き場）と、エリアの `image`（背景）、部品・種類の `image`・`back_image`（`{default, "状態=値"}` で状態ごとに替えられる）。画面は `/assets/` で root の下だけを配る。惨劇RoopeR の再現（`local/tragedy-looper.yaml`、生成は `local/gen_tl.py`）は sangeki の惨劇コモンズ5th を指す（利用は惨劇RoopeR 関連に限る。公開時は「惨劇コモンズ作成：BakaFire・紺ノ玲」とリンクを表記）。
+形の盤（RUL-025）：親のエリアの `viewbox`（座標系）と子の `path`（SVG のパス。曲線・円弧・飛び地）で、ボードの絵の上の領域や実物の地図の州を描く（中身は `xy` に置く）。見栄えのための配置場所は子に `slot: true`（部品は親に置き、画面が 1 つずつ並べる。RUL-026）。画像：定義の `assets.root`（画像の置き場）と、エリアの `image`（背景）、部品・種類の `image`・`back_image`（`{default, "状態=値"}` で状態ごとに替えられる）。画面は `/assets/` で root の下だけを配る。惨劇RoopeR の再現（`local/tragedy-looper.yaml`、生成は `local/gen_tl.py`）は sangeki の惨劇コモンズ5th を指す（利用は惨劇RoopeR 関連に限る。公開時は「惨劇コモンズ作成：BakaFire・紺ノ玲」とリンクを表記）。
 
 サンプル：`examples/` に三目並べ・かがり火・六角・オセロ・チェス（名前つきの式 `functions` でチェック）・将棋・麻雀・人狼・精霊獣デュエル（架空。カードの効果とステータス、アクションの `stepwise`）・ルーン決闘（架空。スタックで割り込む、アクションの `cost`）・収穫の道（架空。得点の道・即時得点・巡の終わりの得点・終わりの得点）（古典は公開してよい）。`local/` に花火・ディプロマシー（生成 `local/gen_dip.py`。州の形は jDip の地図 `local/dip/standard.svg`、GPL）・新幕 桜降る代に決闘を（生成 `local/gen_furuyoni.py`。総合ルールを詳細ルールに。ボードはふるよにコモンズの board.png に形を重ねる。出典『桜降る代に決闘を』BakaFire Party を明記し非営利に限る。画像は使っていない。コモンズの画像を使うなら「ふるよにコモンズ/BakaFire,TOKIAME」と rule.html へのリンク）など市販品の再現。デモの対局は `local/social-demos.py` で作り直す。
 

@@ -184,6 +184,19 @@ def _open_offer(talk: list, n) -> dict:
     return talk[i]
 
 
+def _unslot(d: Definition, op: dict) -> dict:
+    """配置場所（area の slot: true。見栄えのための場所）を行き先・元にした操作は、意味を持つ親のエリアへの操作にする（RUL-026）。
+    部品はいつも親に置き、画面が配置場所に 1 つずつ並べる。"""
+    out = op
+    for k in ("to", "from"):
+        a = op.get(k)
+        if isinstance(a, str) and (d.areas.get(a) or {}).get("slot"):
+            while a and (d.areas.get(a) or {}).get("slot"):
+                a = d.parent.get(a)
+            out = {**out, k: a}
+    return out
+
+
 def apply_op(d: Definition, state: dict, op: dict, seed: int, seq: int) -> dict:
     """操作を 1 つ適用した新しい局面を返す。受け付けられない操作は OpError（局面は変えない）。"""
     s = copy.deepcopy(state)
@@ -191,6 +204,7 @@ def apply_op(d: Definition, state: dict, op: dict, seed: int, seq: int) -> dict:
     if s["result"] is not None:
         raise OpError("対局は終了している")
     op = _resolve_selector(d, s, op, seed, seq)
+    op = _unslot(d, op)
     if op.get("act") and s.get("flow"):  # アクションの最初の操作で、行った回数を数える
         s["flow"] = F.record(d, s["flow"], op["action"], op.get("by"))
     if kind == "move":

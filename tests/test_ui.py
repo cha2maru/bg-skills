@@ -596,6 +596,13 @@ areas:
     areas:
       - {id: pond, name: 池, path: "M20 50 A30 30 0 1 0 80 50 A30 30 0 1 0 20 50 Z", color: "#9cf"}
       - {id: hill, name: 丘, path: "M120 90 Q150 0 180 90 Z", color: "#9c6", xy: [150, 70]}
+      - id: row
+        name: 石の列
+        xy: [100, 10]
+        areas:
+          - {id: row-1, slot: true, path: "M90 20 h10 v10 h-10 Z"}
+          - {id: row-2, slot: true, path: "M105 20 h10 v10 h-10 Z"}
+          - {id: row-3, slot: true, path: "M120 20 h10 v10 h-10 Z"}
   - {id: bag, name: 袋}
 objects:
   - {id: stones, kind: stone, count: 5, start: bag}
@@ -620,5 +627,21 @@ def test_shape_board_paths_and_drop(tmp_path, browser):
     page.mouse.up()
     page.wait_for_timeout(800)
     assert s.state()["places"]["pond"] == [{"stones": 1}]
+    page.close()
+    httpd.shutdown()
+
+
+def test_slots_show_parts_one_per_place(tmp_path, browser):
+    """配置場所（slot。RUL-026）：部品は意味を持つ親（石の列）に置き、画面は配置場所に 1 つずつ並べる。配置場所への操作は親への操作になる。"""
+    (tmp_path / "s.yaml").write_text(SHAPES, encoding="utf-8")
+    s = Session.create(tmp_path / "s", tmp_path / "s.yaml", 1, {}, 1)
+    s.apply({"op": "move", "obj": "stones", "from": "bag", "to": "row-3", "n": 2, "by": "keeper"})  # 配置場所へ → 親へ
+    assert s.state()["places"]["row"] == [{"stones": 2}] and not s.state()["places"].get("row-3")
+    httpd, url = _serve(s.dir)
+    page = browser.new_page(viewport={"width": 1440, "height": 900})
+    page.goto(url)
+    page.wait_for_timeout(1500)
+    assert page.locator(".slotpos .slottok").count() == 2
+    assert "2/3" in page.locator(".vbbox[data-area=row] .slotcount").inner_text()
     page.close()
     httpd.shutdown()
