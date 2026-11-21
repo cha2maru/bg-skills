@@ -88,6 +88,7 @@ def main(argv=None):
     sub = p.add_subparsers(dest="cmd", required=True)
     c = sub.add_parser("check", help="参照先が存在するかを確かめる")
     c.add_argument("definition")
+    c.add_argument("--with", dest="variants", action="append", default=[], help="案（定義の断片）を重ねる。何枚でも、順に（CTR-F-007）")
     c = sub.add_parser("expand", help="略記を展開した形を出す")
     c.add_argument("definition")
     c.add_argument("--players", type=int)
@@ -104,6 +105,7 @@ def main(argv=None):
     c.add_argument("--seat", action="append", default=[], help="P1=agent:a のように席と着席者")
     c.add_argument("--seed", type=int, default=0)
     c.add_argument("--from-box", action="store_true", help="すべての部品が箱に入った状態から始める（準備の手順を確かめる）")
+    c.add_argument("--with", dest="variants", action="append", default=[], help="案（定義の断片）を重ねる。何枚でも、順に（CTR-F-007）")
     c.add_argument("--strict", action="store_true", default=None, help="厳格モード：条件・進行から外れた行為を受け付けない（省くと定義の game.strict）")
     c.add_argument("--lenient", dest="strict", action="store_false", help="定義が厳格を既定にしていても、警告だけにする（試し遊び・キーパーの手直し）")
     c.set_defaults(strict=None)
@@ -174,12 +176,42 @@ def main(argv=None):
     c = sub.add_parser("complexity", help="ルールの複雑さの目安（ルール・アクション・条件・式の大きさ・機械で確かめないルール）")
     c.add_argument("definition")
     c.add_argument("--players", type=int)
+    c.add_argument("--with", dest="variants", action="append", default=[], help="案（定義の断片）を重ねる。何枚でも、順に（CTR-F-007）")
     c = sub.add_parser("selfplay", help="作品を問わないでたらめの対戦（今行える手から選ぶ）で、終わり方の偏りと局の長さの目安を出す")
     c.add_argument("definition")
     c.add_argument("--players", type=int, required=True)
     c.add_argument("--games", type=int, default=20)
     c.add_argument("--max-turns", type=int, default=60)
     c.add_argument("--seed", type=int, default=0)
+    c.add_argument("--with", dest="variants", action="append", default=[], help="案（定義の断片）を重ねる。何枚でも、順に（CTR-F-007）")
+    c.add_argument("--record", help="試行の記録（experiments.jsonl）に 1 行足す")
+    c.add_argument("--note", help="試行の記録への書き添え")
+    c = sub.add_parser("compare", help="元の定義と案を同じ条件で多数局回し、終わり方と長さを並べる（第二版）")
+    c.add_argument("definition")
+    c.add_argument("--variant", action="append", default=[], help="名前=案のファイル（何個でも）")
+    c.add_argument("--players", type=int, required=True)
+    c.add_argument("--games", type=int, default=20)
+    c.add_argument("--max-turns", type=int, default=60)
+    c.add_argument("--seed", type=int, default=0)
+    c.add_argument("--with", dest="variants", action="append", default=[], help="案（定義の断片）を重ねる。何枚でも、順に（CTR-F-007）")
+    c.add_argument("--record", help="試行の記録（experiments.jsonl）に 1 行足す")
+    c.add_argument("--note", help="試行の記録への書き添え")
+    c = sub.add_parser("experiments", help="試行の記録を新しい順に出す")
+    c.add_argument("log")
+    c.add_argument("--last", type=int)
+    c = sub.add_parser("init", help="ゲームの作業場（定義の雛形・案・試行の記録・設計の日誌）を作る（第二版）")
+    c.add_argument("folder")
+    c.add_argument("--name")
+    c.add_argument("--players", default="2-4", help="人数（2-4 のように）")
+    c = sub.add_parser("status", help="設計の状態：版・ルール・決まっていないこと・機械の層・最近の試行")
+    c.add_argument("definition")
+    c.add_argument("--players", type=int)
+    c.add_argument("--experiments", help="試行の記録（experiments.jsonl）")
+    c.add_argument("--with", dest="variants", action="append", default=[], help="案（定義の断片）を重ねる。何枚でも、順に（CTR-F-007）")
+    c = sub.add_parser("rulebook", help="人が読む手引き（Markdown）を書き出す。詳細ルールと未決の裁定は出さない")
+    c.add_argument("definition")
+    c.add_argument("--players", type=int)
+    c.add_argument("--with", dest="variants", action="append", default=[], help="案（定義の断片）を重ねる。何枚でも、順に（CTR-F-007）")
     c = sub.add_parser("pass", help="スタックの解決を見送る（積んだ人以外の全員が見送ると一番上を解決する）")
     c.add_argument("session")
     c.add_argument("--by", required=True)
@@ -192,6 +224,7 @@ def main(argv=None):
     c.add_argument("--games", type=int, default=3)
     c.add_argument("--steps", type=int, default=80)
     c.add_argument("--seed", type=int, default=0)
+    c.add_argument("--with", dest="variants", action="append", default=[], help="案（定義の断片）を重ねる。何枚でも、順に（CTR-F-007）")
     c = sub.add_parser("rebase", help="定義を直した後、記録が今の定義で再生できるか確かめ、対局を今の定義に合わせる")
     c.add_argument("session")
     c = sub.add_parser("undo", help="最後の操作（アクションならその全部）を取り消す")
@@ -208,7 +241,7 @@ def main(argv=None):
     a = p.parse_args(argv)
     try:
         if a.cmd == "check":
-            d = load(a.definition)
+            d = load(a.definition, None, None, a.variants)
             bad = check_refs(d)
             opens = [r["id"] for r in d.data.get("rulings") or [] if r.get("status") == "open"]
             _out({"missing_refs": bad, **({"open_rulings": opens} if opens else {})})  # 未決の裁定＝分かっている穴（誤りではない）
@@ -221,7 +254,7 @@ def main(argv=None):
             _out(diff(load(a.old), load(a.new)))
         elif a.cmd == "new":
             seats = dict(s.split("=", 1) for s in a.seat)
-            s = Session.create(a.session, a.definition, a.players, seats, a.seed, a.from_box, a.strict, a.scenario)
+            s = Session.create(a.session, a.definition, a.players, seats, a.seed, a.from_box, a.strict, a.scenario, a.variants)
             _out({"session": str(s.dir), **s.meta})
         elif a.cmd == "op":
             s = Session(a.session)
@@ -393,13 +426,38 @@ def main(argv=None):
             _out(playstats(Session(a.session)))
         elif a.cmd == "complexity":
             from .tools import complexity
-            _out(complexity(load(a.definition, a.players)))
+            _out(complexity(load(a.definition, a.players, None, a.variants)))
         elif a.cmd == "selfplay":
             from .tools import selfplay
-            _out(selfplay(a.definition, a.players, a.games, a.max_turns, a.seed))
+            r = selfplay(a.definition, a.players, a.games, a.max_turns, a.seed, a.variants)
+            if a.record and "error" not in r:
+                from .design import _summary, record
+                record(a.record, a.definition, a.variants, "selfplay", a.players, a.games, a.seed, a.max_turns, _summary(r), a.note)
+            _out(r)
+        elif a.cmd == "compare":
+            from .design import compare, record
+            vs = dict(x.split("=", 1) for x in a.variant)
+            r = compare(a.definition, vs, a.players, a.games, a.max_turns, a.seed, a.variants)
+            if a.record:
+                for name, row in r["rows"].items():
+                    record(a.record, a.definition, a.variants + ([vs[name]] if name in vs else []), "compare", a.players, a.games,
+                           a.seed, a.max_turns, row, a.note)
+            _out(r)
+        elif a.cmd == "experiments":
+            from .design import experiments
+            _out(experiments(a.log, a.last))
+        elif a.cmd == "init":
+            from .design import init
+            _out(init(a.folder, a.name, a.players))
+        elif a.cmd == "status":
+            from .design import status
+            _out(status(load(a.definition, a.players, None, a.variants), a.experiments))
+        elif a.cmd == "rulebook":
+            from .design import rulebook
+            sys.stdout.write(rulebook(load(a.definition, a.players, None, a.variants)))
         elif a.cmd == "fuzz":
             from .tools import fuzz
-            r = fuzz(a.definition, a.players, a.games, a.steps, a.seed)
+            r = fuzz(a.definition, a.players, a.games, a.steps, a.seed, a.variants)
             _out(r)
             if r["crashes"] or r["expr_errors"]:
                 sys.exit(1)

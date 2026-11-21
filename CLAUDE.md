@@ -41,7 +41,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Claude Code のプラグインとして配る（RUL-021。`.claude-plugin/`、`bin/bg`、README.md）。確かめ：`claude plugin validate .`。
 
-新しいゲームを作るとき：`bg-design`（アイデア → 定義、bg check・bg fuzz まで）→ `bg-playtest`（エージェントに席ごとに遊ばせる）→ `bg-balance`（多数局で測り、数値を 1 つずつ変えて比べる）。点検：`bg-hidden-info-audit`（隠れた情報の漏れのチェック表）、`bg-rules-audit`（ルール文と定義の突き合わせ）。
+自作のゲームを始めるとき：`bg-start`（`bg init` で作業場 → 最初の 1 局）。改訂の 1 周：`bg-iterate`（`bg status` → 案 `variants/*.yaml` → `bg compare --record` → 取り込んで版を上げ `journal.md`。第二版、RUL-028・CTR-F-007）。新しいゲームを作るとき：`bg-design`（アイデア → 定義、bg check・bg fuzz まで）→ `bg-playtest`（エージェントに席ごとに遊ばせる）→ `bg-balance`（多数局で測り、数値を 1 つずつ変えて比べる）。点検：`bg-hidden-info-audit`（隠れた情報の漏れのチェック表）、`bg-rules-audit`（ルール文と定義の突き合わせ）。
 
 ## 仕様と記録
 
@@ -77,6 +77,12 @@ uv run bg undo sessions/s1                             # 最後の操作（ア�
 uv run bg pass sessions/s1 --by P2                     # スタックの解決を見送る（bg resolve はキーパーが解決を進める）
 uv run bg selfplay examples/rune-clash.yaml --players 2 --games 30   # 作品を問わないでたらめの対戦（終わり方の偏りと局の長さの目安）
 uv run bg fuzz examples/beast-duel.yaml --players 2   # でたらめ実行：式の誤り・エンジンの不具合・一度も行えないアクションを探す
+uv run bg init games/mygame --name 私のゲーム --players 2-4   # 作業場（game.yaml・variants/・experiments.jsonl・journal.md）
+uv run bg compare games/mygame/game.yaml --variant hand-5=games/mygame/variants/hand-5.yaml --players 2 --games 30 --record games/mygame/experiments.jsonl  # 元と案を比べて記録
+uv run bg status games/mygame/game.yaml --experiments games/mygame/experiments.jsonl   # 設計の状態（決まっていないこと・最近の試行）
+uv run bg experiments games/mygame/experiments.jsonl --last 5   # 試行の記録（新しい順）
+uv run bg rulebook games/mygame/game.yaml > RULES.md   # 人が読む手引き（詳細ルール・未決の裁定は出さない）
+# check・new・fuzz・selfplay・complexity・status・rulebook は --with 案.yaml（何枚でも）で案を重ねる
 uv run bg rebase sessions/s1                           # 定義を直した後、記録が再生できれば対局を今の定義に合わせる
 uv run bg say sessions/s1 "こんにちは" --by P1 --to P2  # 発言（--to を省くと全員）
 uv run bg say sessions/s1 "木 2 と鉱石 1" --by P1 --to P2 --offer '[{"op":"move","obj":"res-lumber","from":"hand-P1","to":"hand-P2","n":2}]'  # 提案（受けたらまとめて行う）

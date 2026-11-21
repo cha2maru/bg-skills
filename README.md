@@ -15,11 +15,26 @@
 - 要るもの：[uv](https://docs.astral.sh/uv/)（Python 3.11 以上は uv が用意する）。最初の `bg` の実行で、プラグインのフォルダに依存（PyYAML）が入る。
 - 画面のテストを動かすときだけ playwright（`uv run --with playwright ...`）。
 
+## 自分のゲームを作る（導入から改訂まで）
+
+ルールが固まっていないうちから定義にし、回しながら改訂していく流れ（第二版）。Claude に「ボードゲームを作り始めたい」と言えば bg-start が案内する。
+
+1. **作業場を作る**：`bg init games/mygame --name 私のゲーム --players 2-4`。動く最小の雛形 `game.yaml`、案の置き場 `variants/`、試行の記録 `experiments.jsonl`、設計の日誌 `journal.md` ができる。
+2. **アイデアを定義にする**（bg-design）。決まっていないことは `game.open_questions` と、未決の裁定（`rulings` の `status: open`）に残してよい。
+3. **状態を見る**：`bg status games/mygame/game.yaml --experiments games/mygame/experiments.jsonl`（決まっていないこと・機械の層の無いルール・最近の試行）。
+4. **案を試して比べる**（bg-iterate）：変えるところだけを `variants/<案>.yaml` に書き、
+   `bg compare games/mygame/game.yaml --variant 案=games/mygame/variants/案.yaml --players 3 --games 30 --record games/mygame/experiments.jsonl --note "何を確かめるか"`。
+   席ごとの勝ちの割合・長さ・決着しない割合が並ぶ。
+5. **取り込む**：良ければ案を `game.yaml` に移して `game.version` を上げ、`journal.md` に理由と根拠の試行を書く。
+6. **人と遊ぶ**：`bg rulebook games/mygame/game.yaml > RULES.md`（手引き）と `bg serve`（卓の画面）。エージェントに遊ばせるなら bg-playtest。
+
 ## 使う
 
 | スキル | 使うとき |
 |---|---|
+| `bg-start` | プラグインを入れた後、作業場を作って最初の 1 局を回すまで |
 | `bg-design` | ゲームのアイデアを定義（YAML）に起こし、`bg check`・`bg fuzz` を通す |
+| `bg-iterate` | 案を作って元と比べ、試行を記録し、取り込んで版を上げる（改訂の 1 周） |
 | `bg-playtest` | エージェントに席ごとの見え方だけで遊ばせ、詰まり・不具合・ルールの穴を報告させる |
 | `bg-balance` | 多数局で勝率・局の長さを測り、数値を 1 つずつ変えて比べる |
 | `bg-rules-audit` | ルールの文と定義の食い違い・穴を洗い出す |

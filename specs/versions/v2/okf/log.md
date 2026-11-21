@@ -61,3 +61,5 @@
 ## 2026-11-21（v2）
 
 - v1 を固め（okf.yaml の frozen）、v1 の okf を写して v2 を始めた（base: ../../v1/okf）。v1 の区切り：CTR-F-001 r6、RUL-001〜027、ふるよにの再現まで（コミット 5a291b7）。
+- RUL-028 を記録し、WSH-016〜018、REQ-027〜031、SPC-071〜077、CTR-F-007、OBJ-010803 を起こした（第二版。ユースケースと判断は notes/v2/usecases.md）。
+- CTR-F-002 を r2 に改版（案の写し variant-<n>.yaml を追加。追加だけ）。参照の rev を 2 に揃えた。第二版を実装した（SPC-071〜077。bg init・status・compare・experiments・rulebook、--with・--record、スキル bg-start・bg-iterate）。selfplay は席ごとの勝ちの割合を出し、auto_end の定義では結果が記録されるまで進める（以前は巡の終わりを待たずに打ち切っていた）。

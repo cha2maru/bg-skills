@@ -10,7 +10,7 @@ PRD-001 bg-skills
    ├─ CMP-0105 卓の画面 ── OBJ-010501 卓
    ├─ CMP-0106 画面の API ── OBJ-010601〜010606
    ├─ CMP-0107 書き出し ── OBJ-010701 TTS 書き出し
-   ├─ CMP-0108 スキル ── OBJ-010801 定義づくり／010802 振り返りとバランス（未実装）
+   ├─ CMP-0108 スキル ── OBJ-010801 定義づくり／010802 振り返りとバランス／010803 導入と改訂
    └─ CMP-0109 実行環境 ── OBJ-010901 WSL の Python 環境
 ```
 
@@ -38,6 +38,7 @@ PRD-001 bg-skills
 - [OBJ-010701 TTS 書き出し](/structure/OBJ-010701.md)
 - [OBJ-010801 定義づくりのスキル](/structure/OBJ-010801.md)
 - [OBJ-010802 振り返りとバランスのスキル](/structure/OBJ-010802.md)
+- [OBJ-010803 導入と改訂のスキル](/structure/OBJ-010803.md)
 - [OBJ-010601 定義の取得API](/structure/OBJ-010601.md)
 - [OBJ-010602 見え方の取得API](/structure/OBJ-010602.md)
 - [OBJ-010603 記録の取得API](/structure/OBJ-010603.md)

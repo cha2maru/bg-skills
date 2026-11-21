@@ -1,12 +1,12 @@
 ---
 type: functional-contract
 id: CTR-F-002
-revision: 1
+revision: 2
 title: 対局のフォルダの形式
 provider: /structure/CMP-0102.md
 format: file-format
 thickness: thin
-elements: [対局の情報, 操作の記録, シナリオの写し]
+elements: [対局の情報, 操作の記録, シナリオの写し, 案の写し]
 status: stable
 tags: []
 implementation: []
@@ -23,7 +23,7 @@ implementation: []
 
 ## Files and Placement
 
-`sessions/<名前>/`（git 管理外）。`meta.json`（対局の情報）、`log.jsonl`（操作の記録。1 行 1 操作）、`scenario.yaml`（シナリオの写し。あれば）。
+`sessions/<名前>/`（git 管理外）。`meta.json`（対局の情報）、`log.jsonl`（操作の記録。1 行 1 操作）、`scenario.yaml`（シナリオの写し。あれば）、`variant-<n>.yaml`（重ねた案の写し。`session.yaml` の `variants` に名前とファイル。r2、RUL-028）。再生は写しを使う（元の案のファイルを直しても対局は変わらない）。
 
 ## Structure
 

@@ -686,7 +686,8 @@ class Session:
         self.dir = Path(path)
         self.meta = yaml.safe_load((self.dir / "session.yaml").read_text(encoding="utf-8"))
         sc = self.dir / self.meta["scenario"] if self.meta.get("scenario") else None
-        self.defn = load(self.meta["definition"], self.meta["players"], sc)
+        vs = [self.dir / v["file"] for v in self.meta.get("variants") or []]  # 案は対局のフォルダの写しを使う（CTR-F-007）
+        self.defn = load(self.meta["definition"], self.meta["players"], sc, vs)
         if self.defn.data["game"].get("version") != self.meta["version"]:
             raise OpError(f"定義の版が対局と違う（対局 {self.meta['version']}）")
         h = _hash(self.meta["definition"])
@@ -695,8 +696,9 @@ class Session:
         self.last_warnings, self.last_ops = [], []
 
     @classmethod
-    def create(cls, path, definition, players, seats, seed, from_box=False, strict=None, scenario=None):
-        d = load(definition, players, scenario)  # 人数が範囲外なら DefinitionError
+    def create(cls, path, definition, players, seats, seed, from_box=False, strict=None, scenario=None, variants=None):
+        variants = list(variants or [])
+        d = load(definition, players, scenario, variants)  # 人数が範囲外なら DefinitionError
         if strict is None:  # 省いたら定義の既定（game.strict。隠れた情報のある作品は、外れた行為で情報が漏れるので厳格が既定）
             strict = bool(d.data["game"].get("strict"))
         bad = set(seats) - set(d.players)
@@ -708,11 +710,15 @@ class Session:
         p.mkdir(parents=True)
         if scenario:  # シナリオは対局のフォルダに写す（定義は公開しても、脚本は対局の中にだけ置ける）
             (p / "scenario.yaml").write_bytes(Path(scenario).read_bytes())
+        vmeta = []
+        for i, v in enumerate(variants, 1):  # 案も写す（後で案のファイルを直しても、この対局は変わらない）
+            (p / f"variant-{i}.yaml").write_bytes(Path(v).read_bytes())
+            vmeta.append({"name": Path(v).stem, "file": f"variant-{i}.yaml"})
         meta = {"definition": str(Path(definition).resolve()), "def_hash": _hash(definition), "game": d.data["game"]["id"],
                 "version": d.data["game"].get("version"), "players": players,
                 "seats": {pl: seats.get(pl) for pl in d.players}, "seed": seed,
                 **({"start": BOX} if from_box else {}), **({"strict": True} if strict else {}),
-                **({"scenario": "scenario.yaml"} if scenario else {})}
+                **({"scenario": "scenario.yaml"} if scenario else {}), **({"variants": vmeta} if vmeta else {})}
         (p / "session.yaml").write_text(yaml.safe_dump(meta, allow_unicode=True, sort_keys=False), encoding="utf-8")
         (p / "log.jsonl").write_text("", encoding="utf-8")
         return cls(p)

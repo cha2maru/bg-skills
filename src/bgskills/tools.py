@@ -336,7 +336,7 @@ def diff(a: Definition, b: Definition) -> dict:
     }
 
 
-def fuzz(path, players: int, games: int = 3, steps: int = 80, seed: int = 0) -> dict:
+def fuzz(path, players: int, games: int = 3, steps: int = 80, seed: int = 0, variants=None) -> dict:
     """でたらめ実行：アクションと引数をでたらめに選んで行い、局面・見え方・指標・知らせを作る。
     受け付けない（OpError）のは普通。式の誤り（定義の誤り）と、それ以外の例外（エンジンの不具合）を集める。"""
     import json
@@ -355,7 +355,7 @@ def fuzz(path, players: int, games: int = 3, steps: int = 80, seed: int = 0) -> 
     for g in range(games):
         rnd = random.Random(f"{seed}:{g}")
         # 厳格モード：条件・進行から外れた行為は手順の前に断る（手順の式の誤りは、行えるはずの局面で起きたものだけになる）
-        s = Session.create(Path(tempfile.mkdtemp()) / "s", path, players, {}, seed + g, strict=True)
+        s = Session.create(Path(tempfile.mkdtemp()) / "s", path, players, {}, seed + g, strict=True, variants=variants)
         # 対局を終える手順（op: end）のあるアクションは、でたらめに選ぶとすぐ終わるので最後の 1 割だけ
         ends = {a["id"] for a in s.defn.data.get("actions") or [] if '"op": "end"' in json.dumps(a.get("steps"))}
         acts_all = s.defn.data.get("actions") or []
@@ -422,7 +422,7 @@ def random_step(s, rnd, staged: dict, max_turns: int = 60) -> str | None:
         r = st["result"]
         return r.get("text") or "・".join(f"{p}:{v}" for p, v in (r.get("results") or {}).items())
     sig = end_signals(s.defn, st)
-    if sig:
+    if sig and not (s.defn.data.get("flow") or {}).get("auto_end"):  # 自動で終える定義は、時機（巡の終わりなど）を待って結果が記録されるまで進める
         return sig[0]
     f = st.get("flow") or {}
     if f.get("turn_no", 0) > max_turns or not f.get("stage"):
@@ -467,7 +467,7 @@ def random_step(s, rnd, staged: dict, max_turns: int = 60) -> str | None:
     return "進められない"
 
 
-def selfplay(path, players: int, games: int = 20, max_turns: int = 60, seed: int = 0) -> dict:
+def selfplay(path, players: int, games: int = 20, max_turns: int = 60, seed: int = 0, variants=None) -> dict:
     """作品を問わない対戦（バランスの目安）：random_step を終わるまで繰り返し、終わり方ごとに数える。
     作品専用のボットより弱く、強い手を選ばない（偏りの目安で、強さの比較ではない）。"""
     import random
@@ -475,10 +475,10 @@ def selfplay(path, players: int, games: int = 20, max_turns: int = 60, seed: int
     from collections import Counter
     from pathlib import Path
     from .session import Session
-    outcomes, turns = Counter(), []
+    outcomes, turns, seats = Counter(), [], {}
     for g in range(games):
         rnd = random.Random(f"{seed}:{g}")
-        s = Session.create(Path(tempfile.mkdtemp()) / "s", path, players, {}, seed + g, strict=True)
+        s = Session.create(Path(tempfile.mkdtemp()) / "s", path, players, {}, seed + g, strict=True, variants=variants)
         if not (s.defn.data.get("flow") or {}).get("stages"):
             return {"error": "進行（flow）のない定義は、手番の人が分からないので selfplay できない"}
         staged, result = {}, None
@@ -487,8 +487,15 @@ def selfplay(path, players: int, games: int = 20, max_turns: int = 60, seed: int
             if result:
                 break
         outcomes[result or "打ち切り"] += 1
-        turns.append((s.state().get("flow") or {}).get("turn_no", 0))
-    return {"games": games, "outcomes": dict(outcomes.most_common()), "avg_turns": round(sum(turns) / max(1, len(turns)), 1)}
+        st = s.state()
+        turns.append((st.get("flow") or {}).get("turn_no", 0))
+        for p, r in ((st.get("result") or {}).get("results") or {}).items():  # 席ごとの勝ち・負け・引き分け（先手の有利の目安）
+            seats.setdefault(p, Counter())[r] += 1
+    out = {"games": games, "outcomes": dict(outcomes.most_common()), "avg_turns": round(sum(turns) / max(1, len(turns)), 1)}
+    if seats:
+        out["seats"] = {p: dict(c) for p, c in seats.items()}
+        out["win_rate"] = {p: round(c.get("win", 0) / games, 2) for p, c in seats.items()}
+    return out
 
 
 def complexity(d: Definition) -> dict:

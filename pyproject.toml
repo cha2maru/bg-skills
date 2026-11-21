@@ -1,6 +1,6 @@
 [project]
 name = "bg-skills"
-version = "0.1.0"
+version = "0.2.0"
 description = "Board game definitions that agents can read, operate and play"
 requires-python = ">=3.11"
 dependencies = ["pyyaml>=6"]

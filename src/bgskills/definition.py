@@ -340,8 +340,42 @@ def merge(raw: dict, scenario: dict) -> dict:
     return out
 
 
-def load(path, players: int | None = None, scenario=None) -> Definition:
+def overlay(raw: dict, frag: dict) -> dict:
+    """案（定義と同じ形式の断片）を重ねる（CTR-F-007・RUL-028）。辞書は中まで重ね、並びの要素は id が同じなら差し替え、
+    無ければ足す（id の無い要素は足す）。トップの remove に挙げた id の要素は、重ねた後に並びから除く。"""
+    def deep(a, b):
+        if isinstance(a, dict) and isinstance(b, dict):
+            return {**a, **{k: deep(a.get(k), v) if k in a else copy.deepcopy(v) for k, v in b.items()}}
+        if isinstance(a, list) and isinstance(b, list):
+            out = copy.deepcopy(a)
+            pos = {x.get("id"): i for i, x in enumerate(out) if isinstance(x, dict) and x.get("id") is not None}
+            for x in b:
+                key = x.get("id") if isinstance(x, dict) else None
+                if key is not None and key in pos:
+                    out[pos[key]] = copy.deepcopy(x)
+                else:
+                    out.append(copy.deepcopy(x))
+            return out
+        return copy.deepcopy(b)
+    frag = dict(frag or {})
+    remove = set(frag.pop("remove", None) or [])
+    out = deep(copy.deepcopy(raw), frag)
+    if remove:
+        for k, v in out.items():
+            if isinstance(v, list):
+                out[k] = [x for x in v if not (isinstance(x, dict) and x.get("id") in remove)]
+    return out
+
+
+def variant_name(path) -> str:
+    return Path(path).stem
+
+
+def load(path, players: int | None = None, scenario=None, variants=None) -> Definition:
+    """定義を読み、案（variants。順に）とシナリオ（最後）を重ねる。"""
     raw = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
+    for v in variants or []:
+        raw = overlay(raw, yaml.safe_load(Path(v).read_text(encoding="utf-8")) or {})
     if scenario:
         raw = merge(raw, yaml.safe_load(Path(scenario).read_text(encoding="utf-8")))
     return Definition(raw, players, str(path))
