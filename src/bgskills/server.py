@@ -25,7 +25,7 @@ def _area_tree(d, areas):
                     "pos": a.get("pos"), "owner": a.get("owner"), "ordered": bool(a.get("ordered") or any(
                         d.kinds[k].get("ordered") for k in d.kind_chain(a.get("kind")))),
                     "visibility": visibility(d, a["id"]), "shape": a.get("shape"), "hex": bool(a.get("hex")),
-                    "xy": a.get("xy"), "angle": a.get("angle"), "image": d.image(a["id"]), "rect": a.get("rect"), "poly": a.get("poly"), "color": a.get("color"), "aspect": a.get("aspect"), "folded": bool(a.get("folded")),
+                    "xy": a.get("xy"), "angle": a.get("angle"), "image": d.image(a["id"]), "rect": a.get("rect"), "poly": a.get("poly"), "path": a.get("path"), "viewbox": a.get("viewbox"), "color": a.get("color"), "aspect": a.get("aspect"), "folded": bool(a.get("folded")),
                     "areas": _area_tree(d, a.get("areas"))})
     return out
 

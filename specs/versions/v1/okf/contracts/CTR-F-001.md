@@ -1,7 +1,7 @@
 ---
 type: functional-contract
 id: CTR-F-001
-revision: 4
+revision: 5
 title: ゲーム定義の形式（bg-def）
 provider: /structure/CMP-0101.md
 format: file-format
@@ -106,7 +106,7 @@ implementation: []
 | game | 辞書 | ○ | id・name・summary・version・players{min,max}・open_questions・strict（対局の既定を厳格モードにする。bg new --lenient で外せる） | ゲームの見出しと未決 |
 | players | 並び | ○ | id・name・text・color（for_each・copies 可） | 原型：プレイヤー |
 | kinds | 辞書 | | base（area・object・ほかの種類）・text・name・states（値ごとに text と show{rotate,face}。値の並びの代わりに型 text・player・area・number を書くと書き込む状態）・show_state（いつも出す項目）・derived（部品ごとに局面から計算して見え方に出す値。式の self が部品。残り HP など）・attributes・capacity・ordered・fixture・uses・image・back_image・shape（round・disc・cube・pawn・tile。トークンの形。card か無しはカード） | 種類。必ず area か object にたどり着く |
-| areas | 並び | ○ | id・kind・name・owner・visibility{exists,count,face,order。値は all・owner・others・none・席の並び}・ordered・capacity・on_enter・areas（入れ子）・layout{grid・hex}・pos・xy・rect（親の中の [x, y, 幅, 高さ] の割合）・poly（親の中の多角形の頂点の割合。複雑な形）・color（塗り）・aspect（絵のないときの縦横比）・image（背景）・folded（画面で最初にたたむ） | 原型：エリア |
+| areas | 並び | ○ | id・kind・name・owner・visibility{exists,count,face,order。値は all・owner・others・none・席の並び}・ordered・capacity・on_enter・areas（入れ子）・layout{grid・hex}・pos・xy（六角の頂点・辺の位置。形の盤では中身を置く位置）・rect（親の中の [x, y, 幅, 高さ] の割合）・poly（親の中の多角形の頂点の割合。複雑な形）・path（SVG のパス。祖先の viewbox の座標で、曲線・円弧も書ける。r5）・viewbox（子の path・xy の座標系「x y 幅 高さ」。背景の image と下地の color の上に、子の形を重ねて描く。r5）・color（塗り）・aspect（絵のないときの縦横比）・image（背景）・folded（画面で最初にたたむ） | 原型：エリア |
 | objects | 並び | | id・kind・count・copies・for_each・attributes・owner・start・start_state・image・back_image（文字列か {default, "状態=値"}） | 原型：オブジェクト |
 | links | 並び | | between・type | 原型：リンク |
 | groups | 辞書 | | members | リンクの派生（略記） |
@@ -133,6 +133,10 @@ implementation: []
 ## 詳細ルール（r4）
 
 大会の審判用の総合ルールのように、遊ぶ人の手引きには出さないが定義には要るルールは、`rules` に `detail: true` で書く（RUL-024）。手引き（画面のルール欄の初めの一覧、TTS の書き出し）には出さず、画面では「詳細ルール」としてたたんで出す。裁定（rulings）は文（手引き・詳細ルール）で決まらない点だけを決める。強さ：詳細ルール＞手引きのルール＞裁定＞機械の層。
+
+## 形の盤（r5）
+
+ボードの絵の上の領域や、実物の地図の州のように、多角形では書きにくい形（曲線・円弧・飛び地）は、親のエリアに `viewbox` を書き、子に `path`（SVG のパス）を書く（RUL-025）。中身（部品）は `xy`（なければ形の中心）に置く。1 つのエリアが離れた 2 か所に描かれていてもよい（サブパスを並べる）。`bg check` は、path の祖先に viewbox がないことを知らせる。
 
 ## Compatibility
 

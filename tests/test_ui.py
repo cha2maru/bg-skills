@@ -581,3 +581,44 @@ def test_view_error_does_not_keep_previous_viewpoint(tmp_path, browser):
     assert "局面を出せない" in page.locator("#table").inner_text()
     page.close()
     httpd.shutdown()
+
+
+SHAPES = """
+format: bg-def/0.1
+game: {id: shapes, name: 形の盤, version: 1, players: {min: 1, max: 1}}
+players: [{id: P1}]
+kinds: {stone: {base: object, shape: disc, distinct: false}}
+areas:
+  - id: board
+    name: 盤
+    viewbox: "0 0 200 100"
+    color: "#ddd"
+    areas:
+      - {id: pond, name: 池, path: "M20 50 A30 30 0 1 0 80 50 A30 30 0 1 0 20 50 Z", color: "#9cf"}
+      - {id: hill, name: 丘, path: "M120 90 Q150 0 180 90 Z", color: "#9c6", xy: [150, 70]}
+  - {id: bag, name: 袋}
+objects:
+  - {id: stones, kind: stone, count: 5, start: bag}
+rules: [{id: R1, type: action, text: 石を池か丘に置く。}]
+"""
+
+
+def test_shape_board_paths_and_drop(tmp_path, browser):
+    """形の盤（RUL-025）：viewbox の中の path（円弧・曲線）をエリアとして描き、形に部品を落として動かせる。"""
+    (tmp_path / "s.yaml").write_text(SHAPES, encoding="utf-8")
+    s = Session.create(tmp_path / "s", tmp_path / "s.yaml", 1, {}, 1)
+    httpd, url = _serve(s.dir)
+    page = browser.new_page(viewport={"width": 1440, "height": 900})
+    page.goto(url)
+    page.wait_for_timeout(1500)
+    assert page.locator("svg.vbsvg path[data-area=pond]").count() == 1 and page.locator(".vbbox[data-area=hill]").count() == 1
+    chip = page.locator("[data-area=bag] .chip").first.bounding_box()
+    pond = page.locator("svg.vbsvg path[data-area=pond]").bounding_box()
+    page.mouse.move(chip["x"] + 5, chip["y"] + 5)
+    page.mouse.down()
+    page.mouse.move(pond["x"] + pond["width"] * 0.25, pond["y"] + pond["height"] * 0.5, steps=8)
+    page.mouse.up()
+    page.wait_for_timeout(800)
+    assert s.state()["places"]["pond"] == [{"stones": 1}]
+    page.close()
+    httpd.shutdown()

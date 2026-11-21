@@ -120,7 +120,7 @@ def test_hanabi_hidden_own_hand_and_hints(tmp_path):
 def test_diplomacy_map_and_spring_1901(tmp_path):
     d = load(DIPLOMACY)
     assert check_refs(d) == []
-    prov = [a["id"] for a in d.areas["board"]["areas"]]
+    prov = [a["id"] for a in d.areas["board"]["areas"] if a.get("kind") != "impassable"]  # スイス（通れない）は州ではない
     kinds = {p: d.areas[p]["kind"] for p in prov}
     assert len(prov) == 75 and sorted(kinds.values()).count("sea") == 19
     assert len([o for o in d.parts if o.startswith("sc-")]) == 34

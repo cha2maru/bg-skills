@@ -1,4 +1,4 @@
-"""ゲーム定義の形式の正本（CTR-F-001 r4）：置き場所ごとに使ってよい項目。
+"""ゲーム定義の形式の正本（CTR-F-001 r5）：置き場所ごとに使ってよい項目。
 
 bg check はこれに無い項目（打ち間違い・古い書き方）を、似た項目の候補つきで知らせる。bg schema は同じ表から
 JSON Schema を書き出す（エディタの補完・エージェントの読み物）。項目を足すときは、ここと CTR-F-001 を一緒に直す。
@@ -16,8 +16,9 @@ FIELDS: dict[str, set[str]] = {
     "team": {"name", "text"},
     "kind": {"base", "name", "text", "states", "show_state", "derived", "attributes", "capacity", "ordered", "fixture", "distinct",
              "uses", "image", "back_image", "shape", "source"},
-    "area": {"id", "name", "text", "kind", "owner", "visibility", "capacity", "ordered", "areas", "for_each", "layout", "pos", "rect",
-             "poly", "color", "aspect", "folded", "image", "on_enter"},
+    "area": {"id", "name", "text", "kind", "owner", "visibility", "capacity", "ordered", "areas", "for_each", "layout", "pos", "xy", "rect",
+             "poly", "color", "aspect", "folded", "image", "on_enter",
+             "path", "viewbox"},  # path：SVG のパス（親の viewbox の座標。曲線・円弧も）。viewbox：子の path・xy の座標系（RUL-025）
     "object": {"id", "name", "kind", "owner", "start", "start_state", "attributes", "count", "copies", "for_each", "image", "back_image"},
     "link": {"between", "type", "text"},
     "action": {"id", "name", "rule", "when", "by", "params", "require", "let", "steps", "cost", "secret", "stepwise", "stack",
@@ -152,7 +153,7 @@ def json_schema() -> dict:
     action = obj("action", {"params": {"type": "array", "items": obj("param", {"require": req})}, "require": req,
                             "steps": steps, "cost": steps})
     return {
-        "$schema": "https://json-schema.org/draft/2020-12/schema", "title": "bg-skills game definition (CTR-F-001 r4)",
+        "$schema": "https://json-schema.org/draft/2020-12/schema", "title": "bg-skills game definition (CTR-F-001 r5)",
         "$defs": defs,
         **obj("top", {
             "game": obj("game"), "players": {"type": "array", "items": obj("player")},

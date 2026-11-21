@@ -29,6 +29,7 @@ description: 新しいボードゲーム（カードゲーム・盤のゲーム�
    - 何度も使う式 → `functions`。数える値 → `metrics`。知らせ → `signals`（プレイヤーに見せるなら `public: true`）
    - 終わり → `flow.end_when` に `winners`・`losers`（式）か `draw` か `winners: scoring`（`flow.scoring` の得点と同点の比べ方）、`timing`（その巡を終えてからなら round_end）。自動で終えるなら `flow.auto_end: true`。手番の終わりの処理（手札の上限など）は手番の `on_end`。型ごとの書き方は `specs/versions/v1/okf/notes/endgame/gates.md`。得点の道（マスを進む駒）・即時得点・決まった時機の得点計算は `examples/harvest-road.yaml`。トークン（駒・キューブ・円盤）は種類の `shape`（round・disc・cube・pawn・tile）
    - 遊ぶ人の手引きより細かい文（大会の総合ルール・審判用の決まり）は、`rules` に `detail: true` で書く（手引きに出さない。CTR-F-001 r4）。アクションの `rule` は、実装した詳細ルールの節を指す。手本は `specs/versions/v1/okf/notes/detail-rules/gates.md`
+   - 盤の絵の上の領域・地図の州のように、直線の多角形（poly）で書きにくい形は、親に `viewbox`、子に `path`（SVG のパス）と `xy`（中身を置く位置）を書く（形の盤。CTR-F-001 r5）
    - 隠れた情報のある作品は `game.strict: true`（外れた行為を記録しない）
 3. **ルールを書く**：`rules` に自然文で、ID（R1…）と `refs`（関係する部品・エリア・用語）を付ける。アクションの `rule` で結ぶ。機械で決めない判断（効果の解釈・裁定）は自然文に残す。
 4. **確かめる**（すべて通るまで直す）

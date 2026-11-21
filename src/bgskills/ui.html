@@ -259,6 +259,26 @@ header label{font-size:12px}
 .kids.grid.dense>.area>.head .fold,.kids.grid.dense>.area .empty{display:none}
 .kids.grid.dense>.area>.items{min-height:0;gap:1px;flex-wrap:wrap}
 .kids.grid.dense .card.token.shape-pawn{width:14px;height:19px}
+/* 形の盤（RUL-025） */
+.vbwrap{position:relative;width:100%;margin:4px auto 0;background:transparent!important}
+.vbsvg{position:absolute;inset:0;width:100%;height:100%}
+.vbcell{stroke:rgba(40,40,40,.55);stroke-width:1.2;vector-effect:non-scaling-stroke;cursor:pointer;fill-opacity:.92}
+.vbcell.clear{fill:rgba(255,255,255,0);stroke:rgba(255,255,255,.0)}
+.vbcell.clear:hover,.vbcell.drop{fill:rgba(255,230,120,.25);stroke:#d89b00}
+.vbcell:hover{stroke:#333;stroke-width:2}
+.vbcell.sel{stroke:var(--accent);stroke-width:3}
+.vbcell.recent{stroke:#f0a020;stroke-width:3}
+.vbbox{position:absolute;transform:translate(-50%,-50%);background:transparent!important;border:none!important;padding:0!important;min-width:0;width:max-content;max-width:120px;pointer-events:none}
+.vbbox>*{pointer-events:auto}
+.vbbox>.head{font-size:9.5px;line-height:1.1;justify-content:center;background:rgba(255,255,255,.65);border-radius:4px;padding:0 3px;margin:0 auto;width:max-content}
+.vbbox>.head .fold,.vbbox>.head .meta,.vbbox .empty{display:none}
+.vbbox>.items{justify-content:center;min-height:0;gap:2px;flex-wrap:wrap}
+.vbbox .card{width:22px;height:30px;font-size:8px;padding:1px}
+.vbbox .card>div:first-child{-webkit-line-clamp:1}
+.vbbox .card .bignum,.vbbox .card .badges,.vbbox .card .orient,.vbbox .card .cid,.vbbox .card .written{display:none}
+.vbbox .card.token{width:18px;height:18px}
+.vbbox .chip{font-size:10px;padding:0 4px}
+.onimg .vbbox>.head{opacity:.75}
 /* 見やすさ（RUL-022） */
 .card:not(.img):not(.round):not(.hidden){border-top:4px solid var(--kind, var(--card-line))}
 .card .bignum{position:absolute;right:4px;bottom:2px;font-size:22px;font-weight:700;line-height:1;opacity:.85;pointer-events:none}
@@ -475,9 +495,9 @@ function grab(e, data, onClick) {
   addEventListener("pointermove", move); addEventListener("pointerup", up);
 }
 
-function areaEl(a) {
+function areaEl(a, noKids) {
   const v = VIEW.areas[a.id];
-  const kids = a.areas || [];
+  const kids = noKids === true ? [] : (a.areas || []); // noKids：形の盤（viewbox）の中身の箱。子のエリアは盤が描く
   const gridKids = kids.length && kids.every(k => Array.isArray(k.pos));
   const box = h("div", {class: "area" + (SEL && SEL.id === a.id ? " sel" : "") + (a.image ? " bgimg" : ""), "data-area": a.id});
   if (a.image) box.style.backgroundImage = `url("/assets/${encodeURI(a.image)}")`;  // 背景画像（定義の image）
@@ -524,6 +544,8 @@ function areaEl(a) {
       const sc = hs.clientWidth / wrap.offsetWidth;
       if (sc > 0 && sc < 1) { wrap.style.transformOrigin = "0 0"; wrap.style.transform = `scale(${sc})`; hs.style.height = wrap.offsetHeight * sc + 12 + "px"; hs.style.overflow = "hidden"; requestAnimationFrame(drawLinks); }
     });
+  } else if (kids.length && a.viewbox) {
+    box.append(shapeBoard(a, box));
   } else if (kids.length && kids.every(k => Array.isArray(k.rect) || Array.isArray(k.poly))) {
     // 位置（rect：親の中の [x, y, 幅, 高さ] の割合）。絵があれば絵の縦横比で絵に重ね、なければ aspect の枠に地図のように並べる
     const wrap = h("div", {class: "rectwrap" + (a.image ? "" : " plain")});
@@ -892,6 +914,53 @@ function drawLinks() {
   t.append(svg);
 }
 
+// 形の盤（RUL-025）：親の viewbox の座標で、子のエリアを SVG の形（path：曲線・円弧も。poly・rect は割合）で描き、
+// 背景の絵（image）の上に重ねる。部品は形ごとの箱に置き、位置は xy（viewbox の座標）か形の中心。子の子（海岸など）も形があれば描く
+function shapeBoard(a, box) {
+  const [vx, vy, vw, vh] = String(a.viewbox).trim().split(/[\s,]+/).map(Number);
+  const NS = "http://www.w3.org/2000/svg";
+  const wrap = h("div", {class: "rectwrap vbwrap plain"});
+  wrap.style.aspectRatio = `${vw} / ${vh}`;
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", `${vx} ${vy} ${vw} ${vh}`); svg.setAttribute("class", "vbsvg"); svg.setAttribute("preserveAspectRatio", "none");
+  if (a.color) { // 下地の色（州に入っていない陸地など）
+    const bg = document.createElementNS(NS, "rect");
+    [["x", vx], ["y", vy], ["width", vw], ["height", vh], ["fill", a.color]].forEach(([k, v]) => bg.setAttribute(k, v)); svg.append(bg);
+  }
+  if (a.image) {
+    box.classList.add("onimg"); box.style.backgroundImage = "";
+    const im = document.createElementNS(NS, "image");
+    im.setAttribute("href", `/assets/${encodeURI(a.image)}`);
+    [["x", vx], ["y", vy], ["width", vw], ["height", vh]].forEach(([k, v]) => im.setAttribute(k, v));
+    im.setAttribute("preserveAspectRatio", "none"); svg.append(im);
+  }
+  const d = k => k.path ? k.path
+    : k.poly ? "M" + k.poly.map(([x, y]) => `${vx + x * vw} ${vy + y * vh}`).join(" L") + " Z"
+    : k.rect ? `M${vx + k.rect[0] * vw} ${vy + k.rect[1] * vh} h${k.rect[2] * vw} v${k.rect[3] * vh} h${-k.rect[2] * vw} Z` : null;
+  const shaped = [];
+  const walk = list => list.forEach(k => { if (d(k)) shaped.push(k); walk(k.areas || []); });
+  walk(a.areas || []);
+  const boxes = [];
+  for (const k of shaped) {
+    const pe = document.createElementNS(NS, "path");
+    pe.setAttribute("d", d(k)); pe.setAttribute("data-area", k.id);
+    pe.setAttribute("class", "vbcell" + (SEL && SEL.id === k.id ? " sel" : "") + (RECENT.has(k.id) ? " recent" : "") + (k.color ? "" : " clear"));
+    if (k.color) pe.style.fill = k.color;
+    const tt = document.createElementNS(NS, "title"); tt.textContent = k.name || k.id; pe.append(tt);
+    pe.addEventListener("click", () => select({type: "area", id: k.id, area: k}));
+    svg.append(pe);
+    const el = areaEl(k, true); el.classList.add("vbbox");
+    if (k.xy) { el.style.left = (k.xy[0] - vx) / vw * 100 + "%"; el.style.top = (k.xy[1] - vy) / vh * 100 + "%"; }
+    boxes.push([el, pe, k]);
+  }
+  wrap.append(svg, ...boxes.map(b => b[0]));
+  requestAnimationFrame(() => { // 位置のない箱は形の中心へ（描いてから測る）
+    for (const [el, pe, k] of boxes) if (!k.xy) {
+      const b = pe.getBBox(); el.style.left = (b.x + b.width / 2 - vx) / vw * 100 + "%"; el.style.top = (b.y + b.height / 2 - vy) / vh * 100 + "%";
+    }
+  });
+  return wrap;
+}
 // 卓の大きさ「画面に合わせる」：卓が画面の高さに収まるよう縮める（60% より小さくはしない。表示だけ）
 let ZOOM = "fit";
 function fitTable() {
@@ -905,7 +974,7 @@ function fitTable() {
 }
 // 地図（rect・poly）は画面の高さに収める（縦横比を保って幅を縮める。表示だけ）
 function fitMaps() {
-  for (const w of document.querySelectorAll(".rectwrap.plain")) {
+  for (const w of document.querySelectorAll(".rectwrap.plain, .vbwrap")) {
     w.style.width = "";
     const maxH = Math.max(420, innerHeight - w.getBoundingClientRect().top - 16); // 地図の上端から画面の下まで
     const r = w.offsetWidth / w.offsetHeight;

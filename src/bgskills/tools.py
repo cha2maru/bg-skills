@@ -47,6 +47,15 @@ def check_refs(d: Definition) -> list[dict]:
         if not _resolves(d, ref):
             bad.append({"where": where, "ref": ref})
 
+    for aid, a in d.areas.items():  # 形（path）は、祖先のどれかの viewbox の座標で描く（RUL-025）
+        if a.get("path"):
+            p = d.parent.get(aid)
+            while p and not d.areas[p].get("viewbox"):
+                p = d.parent.get(p)
+            if not p:
+                bad.append({"where": f"area {aid}.path", "ref": "祖先のエリアに viewbox がない（path の座標系が決まらない）"})
+        if a.get("viewbox") and len(str(a["viewbox"]).replace(",", " ").split()) != 4:
+            bad.append({"where": f"area {aid}.viewbox", "ref": f"{a['viewbox']}（「x y 幅 高さ」の 4 つの数）"})
     for r in d.data.get("rules") or []:
         for x in r.get("refs") or []:
             need(f"rule {r['id']}.refs", x)

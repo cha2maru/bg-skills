@@ -397,3 +397,17 @@ def test_fuzz_finds_definition_errors(tmp_path):
     (tmp_path / "d.yaml").write_text(broken, encoding="utf-8")
     r = fuzz(tmp_path / "d.yaml", 2, games=6, steps=150)
     assert any(e["action"] == "retreat" for e in r["expr_errors"]) and r["crashes"] == []
+
+
+def test_check_path_needs_viewbox(tmp_path):
+    """形（path）は祖先の viewbox の座標で描く。viewbox がなければ bg check が知らせる（RUL-025）。"""
+    import yaml
+    from bgskills.definition import Definition
+    from bgskills.tools import check_refs
+    d = {"format": "bg-def/0.1", "game": {"id": "p", "name": "p", "version": 1, "players": {"min": 1, "max": 1}},
+         "players": [{"id": "P1"}], "areas": [{"id": "board", "areas": [{"id": "a", "path": "M0 0 L1 1 Z"}]},
+                                               {"id": "b2", "viewbox": "0 0 10", "areas": [{"id": "c", "path": "M0 0 L1 1 Z"}]}],
+         "objects": [], "rules": [{"id": "R1", "type": "always", "text": "x"}]}
+    (tmp_path / "p.yaml").write_text(yaml.safe_dump(d, allow_unicode=True), encoding="utf-8")
+    bad = {x["where"] for x in check_refs(Definition(d))}
+    assert bad == {"area a.path", "area b2.viewbox"}
