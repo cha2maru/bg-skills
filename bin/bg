@@ -1,0 +1,4 @@
+#!/bin/sh
+# プラグインの bg コマンド：どのプロジェクトからでも、このプラグインの bg を動かす（作業フォルダはそのまま。uv が要る）
+root="$(cd "$(dirname "$0")/.." && pwd)"
+exec uv run --quiet --project "$root" bg "$@"

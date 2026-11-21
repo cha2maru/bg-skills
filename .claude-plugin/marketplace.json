@@ -1,0 +1,12 @@
+{
+  "name": "bg-skills",
+  "description": "bg-skills（ボードゲームの定義・試し遊び・バランス調整）の配布用マーケットプレイス",
+  "owner": { "name": "cha2maru" },
+  "plugins": [
+    {
+      "name": "bg-skills",
+      "source": "./",
+      "description": "ボードゲームの定義（YAML）を作り、エージェントに席ごとに遊ばせ、多数局でバランスを測るスキルと bg コマンド一式"
+    }
+  ]
+}
