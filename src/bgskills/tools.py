@@ -246,9 +246,10 @@ def _texts(d: Definition):
             if a.get(f):
                 yield f"areas.{aid}.{f}", str(a[f])
     for pid, p in d.parts.items():
-        t = (p.get("attributes") or {}).get("title")
-        if isinstance(t, str):
-            yield f"objects.{pid}.title", t
+        for f in ("title", "text"):  # 部品の名前と効果の文（カードの文は遊ぶ人が読む）
+            t = (p.get("attributes") or {}).get(f)
+            if isinstance(t, str) and t:
+                yield f"objects.{pid}.{f}", t
     for a in d.data.get("actions") or []:
         for f in ("name", "when", "text"):
             if a.get(f):
