@@ -242,6 +242,18 @@ header label{font-size:12px}
 .stackwrap>.tokens>.chip{font-size:10px;padding:0 5px;box-shadow:0 1px 3px rgba(0,0,0,.25);white-space:nowrap;max-width:none}
 .stackwrap>.tokens>.card.round{width:22px;height:22px}
 .items.fan>.stackwrap+.card,.items.fan>.card+.stackwrap{margin-left:-20px}
+/* 見やすさ（RUL-022） */
+.card:not(.img):not(.round):not(.hidden){border-top:4px solid var(--kind, var(--card-line))}
+.card .bignum{position:absolute;right:4px;bottom:2px;font-size:22px;font-weight:700;line-height:1;opacity:.85;pointer-events:none}
+.card.side .bignum{font-size:18px}
+.card.hidden:not(.img){background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.07) 0 6px,transparent 6px 12px)}
+.seat.turn{box-shadow:0 0 0 2px var(--accent);background:color-mix(in srgb, var(--accent) 14%, transparent)}
+.seat.turn>.label::before{content:"手番";background:var(--accent);color:#fff;border-radius:9px;padding:0 7px;font-size:11px}
+.card.recent{outline:3px solid #f0a020;outline-offset:1px;animation:recentpulse 1.2s ease-out 2}
+.area.recent{box-shadow:inset 0 0 0 2px #f0a020}
+@keyframes recentpulse{0%{outline-color:#f0a020}50%{outline-color:transparent}100%{outline-color:#f0a020}}
+.stackwrap>.under>.card .bignum{display:none}
+.area .items:has(>.empty:only-child){min-height:0}
 </style>
 </head>
 <body>
@@ -352,6 +364,10 @@ function itemEl(it, container) {
     overlap(it) ? null : stackEl(it, it.id), h("span", {class: "orient", title: `回転 ${disp.rotate}°・${{up: "表", down: "裏", held: "手札"}[disp.face] || disp.face}`},
       `${side ? "横" : "縦"} ${ARROW[disp.rotate] || "↑"}`));
   if (it.image) card.style.backgroundImage = `url("/assets/${encodeURI(it.image)}")`;
+  else if (it.kind && it.shape !== "round") card.style.setProperty("--kind", kindColor(it.kind)); // 種類ごとの色の帯
+  const big = bigNumber(it);
+  if (big && !it.image && it.shape !== "round") card.append(h("span", {class: "bignum", title: big[0]}, big[1]));
+  if (RECENT.has(it.id)) card.classList.add("recent");
   const pc = it.owner && (DEF.players.find(p => p.id === it.owner) || {}).color; // 持ち主の色（定義の players[].color）
   if (pc && !it.image) { card.style.borderColor = pc; card.style.boxShadow = `inset 0 0 0 2px ${pc}`; if (it.shape === "round") { card.style.background = pc; card.style.color = "#fff"; } }
   return overlap(it) ? overlapEl(it, card, side) : card;
@@ -376,6 +392,15 @@ function overlapEl(it, card, side) {
   wrap.append(card);
   if (tokens.length) wrap.append(h("div", {class: "tokens"}, tokens.map(x => itemEl(x, it.id))));
   return wrap;
+}
+// 種類の色：種類の ID から決まる色相（同じ種類はいつも同じ色。表示だけ）
+function kindColor(k) { let x = 0; for (const c of k) x = (x * 31 + c.charCodeAt(0)) % 360; return `hsl(${x} 55% 52%)`; }
+// カードの大きな数：属性 value（なければ最初の数の属性）。数のときだけ
+function bigNumber(it) {
+  const at = it.attributes || {};
+  const keys = "value" in at ? ["value"] : Object.keys(at);
+  for (const k of keys) { const v = at[k]; if ((typeof v === "number" || (typeof v === "string" && /^-?\d+$/.test(v))) && k !== "title") return [k, String(v)]; }
+  return null;
 }
 const ARROW = {0: "↑", 90: "→", 180: "↓", 270: "←"}; // カードの上が向く方向
 function stackEl(it, container) {
@@ -447,13 +472,14 @@ function areaEl(a) {
   if (!v) items.append(h("span", {class: "empty"}, "（この立場からは存在も見えない）"));
   else if (Array.isArray(v.shown)) {
     v.shown.forEach(it => items.append(itemEl(it, a.id)));
-    if (!v.shown.length) items.append(h("span", {class: "empty"}, "空"));
+    if (!v.shown.length && !kids.length) items.append(h("span", {class: "empty"}, "空")); // 子エリアだけの入れ物には出さない
     const cards = v.shown.filter(it => !("count" in it) && it.shape !== "round" && !(it.stacked && it.stacked.length)).length;
     if (cards > 7 || (a.ordered && cards > 5)) items.classList.add("fan"); // 枚数の多い置き場（山札など）は重ねて並べる（表示だけ）
   }
   else if (v.shown && "count" in v.shown) backs(items, v.shown.count, a.ordered, Object.values(v.hidden || {})[0]);
   else if (v.shown && "exists" in v.shown) items.append(h("span", {class: "count"}, v.shown.exists ? "何かある" : "空"));
-  box.append(items);
+  if (items.childNodes.length || !kids.length) box.append(items);
+  if (RECENT.has(a.id)) box.classList.add("recent");
   if (kids.length && a.hex) { // 六角の盤：アキシャル座標 [q, r] から互い違いの位置へ。頂点・辺は xy（マスの大きさ 1 の平面）
     const S = 50, W = Math.sqrt(3) * S, cells = kids.filter(k => k.pos), marks = kids.filter(k => k.xy && !k.pos);
     const pts = cells.map(k => [W * (k.pos[0] + k.pos[1] / 2), 1.5 * S * k.pos[1]]);
@@ -801,7 +827,9 @@ function tableEl() {
       const v = VIEW.metrics && VIEW.metrics[m.id] && VIEW.metrics[m.id].values ? VIEW.metrics[m.id].values[p] : undefined;
       return v === undefined ? null : h("span", {class: "mbadge", title: m.text || m.name}, `${m.name} ${v}`);
     });
-    cells[seat].push(h("div", {class: `seat ${seat}` + (p === $("#as").value ? " me" : "")}, h("div", {class: "label"}, `${p} ${pl.name || ""}${who}`, badges), list.map(areaEl)));
+    const turn = VIEW.flow && VIEW.flow.active === p && !VIEW.flow.ended; // 手番の人の席を目立たせる（RUL-022）
+    cells[seat].push(h("div", {class: `seat ${seat}` + (p === $("#as").value ? " me" : "") + (turn ? " turn" : "")},
+      h("div", {class: "label"}, `${p} ${pl.name || ""}${who}`, badges), list.map(areaEl)));
   }
   for (const [id, cell] of Object.entries(T.place || {})) { const a = take(id); if (a && cells[cell]) cells[cell].push(areaEl(a)); }
   const side = cells.left.length || cells.right.length;
@@ -855,7 +883,21 @@ function fitMaps() {
     if (w.offsetHeight > maxH && r > 0) w.style.width = maxH * r + "px";
   }
 }
+// 最後の操作（同じ時刻に記録された一続き。アクションの手順ならまとめて）で触れた部品と置き場（表示だけ。RUL-022）
+let RECENT = new Set();
+function recentOf(log) {
+  const out = new Set(), last = log[log.length - 1];
+  if (!last) return out;
+  // 同じアクションの手順だけをまとめる（アクションでなければ最後の 1 件）。多すぎる（作り直したデモなど）なら最後の 1 件
+  let i0 = log.length - 1;
+  while (last.action && i0 > 0 && log[i0 - 1].action === last.action && log[i0 - 1].time === last.time && log.length - i0 < 8) i0--;
+  for (let i = log.length - 1; i >= i0; i--) {
+    for (const k of ["obj", "to"]) if (typeof log[i][k] === "string") out.add(log[i][k]);
+  }
+  return out;
+}
 function render() {
+  RECENT = recentOf(LOG);
   $("#table").replaceChildren(...(DEF.table ? tableEl() : DEF.areas.map(areaEl)).filter(Boolean));
   requestAnimationFrame(() => { fitMaps(); fitTable(); drawLinks(); });
   if (SEL && SEL.type === "item") { // 動いた後も同じ部品を指す

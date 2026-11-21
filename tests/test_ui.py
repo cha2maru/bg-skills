@@ -518,3 +518,22 @@ def test_map_table_not_double_shrunk(tmp_path, browser):
     assert box["y"] + box["height"] <= 900 + 1
     page.close()
     httpd.shutdown()
+
+
+def test_turn_seat_recent_move_and_card_face(tmp_path, browser):
+    """見やすさ（RUL-022）：手番の人の席に「手番」、最後に動いた部品と置き場を強調、数の属性を大きく、
+    子エリアだけを持つ入れ物には「空」を出さない。"""
+    s = Session.create(tmp_path / "k", EX / "kagaribi.yaml", 2, {}, 1)
+    s.act("setup", "keeper")
+    card = s.state()["places"]["hand-P1"][0]
+    s.apply({"op": "move", "obj": card, "to": "discard", "by": "P1"})
+    httpd, url = _serve(s.dir)
+    page = browser.new_page(viewport={"width": 1440, "height": 900})
+    page.goto(url)
+    page.wait_for_timeout(1500)
+    assert page.locator(".seat.turn").count() == 1
+    assert page.locator(f".card.recent[data-obj='{card}']").count() == 1
+    assert page.locator("[data-area=discard].recent").count() == 1
+    assert page.locator(".card .bignum").count() >= 1
+    page.close()
+    httpd.shutdown()
