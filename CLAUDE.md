@@ -63,7 +63,7 @@ uv run bg check examples/kagaribi.yaml    # 参照の確認
 uv run bg new sessions/s1 --def examples/kagaribi.yaml --players 2 --seat P1=agent:a --seed 1
 uv run bg op sessions/s1 '{"op":"move","obj":"N4","to":"discard","by":"P2","rule":"R4"}'
 uv run bg show sessions/s1 --as P2 --meaning   # P2 の見え方（--as 省略でキーパー）
-uv run bg serve sessions/s1 --host 172.29.127.192   # 画面（Windows から http://172.29.127.192:8765/ ）
+uv run bg serve sessions/s1 --host <WSL の内側のアドレス>   # 画面（Windows から http://<WSL の内側のアドレス>:8765/ ）
 uv run bg tts sessions/s1 --out exports/s1.json      # TTS の Saved Object に書き出す（Saves/Saved Objects に置く）
 uv run bg new sessions/b1 --def examples/kagaribi.yaml --players 2 --from-box   # 箱から始める
 # 定義の game.strict（人狼など）は厳格モードが既定。試し遊びで警告だけにするなら bg new --lenient

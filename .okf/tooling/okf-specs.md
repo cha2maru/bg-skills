@@ -7,7 +7,7 @@ status: draft
 generated: { by: claude-code/claude-opus-5-5, at: 2026-11-18T13:10:00Z }
 sources:
   - id: okf-specs-readme
-    resource: file:///home/cha2maru/workspace/okf-spec/README.md
+    resource: file://<workspace>/okf-spec/README.md
     title: okf-specs README / plugin/README.md
 ---
 
