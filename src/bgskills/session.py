@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import pickle
 import fcntl
 import json
 import random
@@ -14,6 +15,10 @@ from . import flow as F
 from .definition import BOX, Definition, fill, load
 
 UNLIMITED = "unlimited"
+
+
+class StaleLog(ValueError):
+    """書く直前の記録が、手を選んだときと違う（画面などが先に書いた）。読み直して選び直す。"""
 
 
 class OpError(ValueError):
@@ -153,7 +158,7 @@ def _stack_next(d, s):
 def _resolve_stack(d, s, seed, seq):
     """次の行為の手順を行う（1 つずつ。後の式は結果を読む）。行えなければ立ち消え（何も変えずに外す）。"""
     e = _stack_next(d, s)
-    before = copy.deepcopy(s)
+    before = _clone(s)
     cur = {"s": s, "k": 0}
 
     def run(o):
@@ -197,9 +202,14 @@ def _unslot(d: Definition, op: dict) -> dict:
     return out
 
 
+
+def _clone(x):
+    """局面の写し。局面は JSON にできる値（辞書・リスト・文字列・数）だけなので、deepcopy より速い pickle で写す。"""
+    return pickle.loads(pickle.dumps(x, pickle.HIGHEST_PROTOCOL))
+
 def apply_op(d: Definition, state: dict, op: dict, seed: int, seq: int) -> dict:
     """操作を 1 つ適用した新しい局面を返す。受け付けられない操作は OpError（局面は変えない）。"""
-    s = copy.deepcopy(state)
+    s = _clone(state)
     kind = op.get("op")
     if s["result"] is not None:
         raise OpError("対局は終了している")
@@ -727,7 +737,7 @@ class Session:
         if who is not None and who != "keeper" and who not in self.defn.players:
             raise OpError(f"{who} は席にない（{'・'.join(self.defn.players)}・keeper）")
 
-    def act(self, action_id: str, actor: str, args: dict | None = None) -> dict:
+    def act(self, action_id: str, actor: str, args: dict | None = None, expect: int | None = None) -> dict:
         """アクションの手順をすべて行うか、1 つも行わない（途中で受け付けられなければ記録しない）。"""
         from .query import candidates, check_action, check_param
         self._check_actor(actor)
@@ -740,6 +750,8 @@ class Session:
         with (self.dir / "log.jsonl").open("a", encoding="utf-8") as f:
             fcntl.flock(f, fcntl.LOCK_EX)
             log = self.log()
+            if expect is not None and len(log) != expect:
+                raise StaleLog(f"記録が変わった（{expect} 件のつもりが {len(log)} 件）")
             st, seq, done = self._replay(log), len(log), []
             if st.get("result") is not None:  # 終わった対局では、進行の理由より先に「終わっている」と返す
                 raise OpError("対局は終了している（結果は bg show の result・flow.result）")
@@ -848,9 +860,17 @@ class Session:
         return removed
 
     def log(self) -> list[dict]:
-        return [json.loads(l) for l in (self.dir / "log.jsonl").read_text(encoding="utf-8").splitlines() if l]
+        path = self.dir / "log.jsonl"
+        st = path.stat()
+        key = (st.st_size, st.st_mtime_ns, st.st_ino)
+        cached = getattr(self, "_log_cache", None)
+        if cached and cached[0] == key:  # 前に読んだときと同じファイルなら、読み直さない（書き換えれば大きさか時刻が変わる）
+            return list(cached[1])
+        log = [json.loads(l) for l in path.read_text(encoding="utf-8").splitlines() if l]
+        self._log_cache = (key, log)
+        return list(log)
 
-    def _replay(self, log) -> dict:
+    def _replay(self, log, copy_: bool = True) -> dict:
         # 前回作った局面を覚え、記録がその続きなら増えた分だけ足す（取り消しで変わったら最初から）。記録が正本なのは同じ
         cached = getattr(self, "_cache", None)
         if cached and len(log) >= len(cached[0]) and log[:len(cached[0])] == cached[0]:
@@ -860,18 +880,21 @@ class Session:
         for i, op in enumerate(log[start:], start + 1):
             s = apply_op(self.defn, s, op, self.meta["seed"], i)
         self._cache = (list(log), s)
-        return copy.deepcopy(s)  # 呼ぶ側が書き換えても覚えた局面は変わらない
+        return _clone(s) if copy_ else s  # 呼ぶ側が書き換えても覚えた局面は変わらない
 
-    def state(self) -> dict:
-        return self._replay(self.log())
+    def state(self, copy_: bool = True) -> dict:
+        """局面。copy_=False は覚えた局面をそのまま返す（読むだけの呼び手用。書き換えない）。"""
+        return self._replay(self.log(), copy_)
 
-    def apply(self, op: dict) -> dict:
+    def apply(self, op: dict, expect: int | None = None) -> dict:
         op = {**op, "time": op.get("time") or datetime.now(timezone.utc).isoformat(timespec="seconds")}
         # 画面と bg op が同じ対局に同時に書いても、古い局面に対して受け付けないように読む・足すを 1 つにする
         with (self.dir / "log.jsonl").open("a", encoding="utf-8") as f:
             fcntl.flock(f, fcntl.LOCK_EX)
             self._check_actor(op.get("by"))
             log = self.log()
+            if expect is not None and len(log) != expect:  # 手を選んだ後に、画面などが先に書いた
+                raise StaleLog(f"記録が変わった（{expect} 件のつもりが {len(log)} 件）")
             st, seq = self._replay(log), len(log) + 1
             pre = F.advance_warnings(self.defn, st.get("flow")) if op.get("op") == "advance" else []
             if op.get("op") == "advance" and st.get("stack"):  # 解決待ちがあるうちは進めない（応じる機会が消える）

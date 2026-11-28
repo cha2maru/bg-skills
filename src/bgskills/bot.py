@@ -81,13 +81,13 @@ def _ids(view) -> set:
     return out
 
 
-def legal_moves(s, player, view_=None) -> list[dict]:
+def legal_moves(s, player, view_=None, st=None) -> list[dict]:
     """player が今行える手：{"action": id, "args": {...}}（進行の上で行え、条件を満たす引数の組）と、
     {"advance": "phase"|"turn"}（手番の人）、{"pass": True}（解決待ちがあるとき）。引数の候補は、その席に見えるものだけ。"""
     from .flow import available
     from .query import candidates, check_action
     from .redact import seen_ids, visible_candidates
-    st = s.state()
+    st = st if st is not None else s.state(copy_=False)
     if player in s.defn.players:
         if view_ is None:
             from .view import view
@@ -153,13 +153,14 @@ def load_policy(spec):
     return mod.choose
 
 
-def _apply(s, player, m):
+def _apply(s, player, m, expect=None):
+    """手を記録に足す。expect（手を選んだときの記録の件数）と今の件数が違えば StaleLog（画面などが先に書いた）。"""
     if "action" in m:
-        s.act(m["action"], player, m.get("args") or {})
+        s.act(m["action"], player, m.get("args") or {}, expect=expect)
     elif "advance" in m:
-        s.apply({"op": "advance", "by": player, "to": m["advance"]})
+        s.apply({"op": "advance", "by": player, "to": m["advance"]}, expect=expect)
     elif "pass" in m:
-        s.apply({"op": "pass", "by": player})
+        s.apply({"op": "pass", "by": player}, expect=expect)
 
 
 def step(s, seats: dict, rnd, staged: set, humans=(), trace=None, seed=None) -> tuple:
@@ -167,9 +168,10 @@ def step(s, seats: dict, rnd, staged: set, humans=(), trace=None, seed=None) -> 
     だれも動けなければキーパーが進行を進める。seats は {席: 方針}（無い席はでたらめ）。staged は手番のない段階で行った
     （行う人, アクション）で、ここで足す。返すのは (起きたこと, 席, 断られた手の数)。起きたことは ended・stuck・
     human（humans の席の番。何もしない）・seat（席が 1 手行った）・keeper（キーパーが準備のアクションか進行を行った）。"""
-    from .session import OpError, _stack_next
+    from .session import OpError, StaleLog, _stack_next
     from .view import view
-    st = s.state()
+    n0 = len(s.log())  # この局面を作った記録の件数（書く直前に変わっていたら選び直す）
+    st = s.state(copy_=False)  # 読むだけ（手は記録に足して行う）
     f = st.get("flow") or {}
     if st.get("result") is not None or (f and not f.get("stage")):
         return "ended", None, 0
@@ -181,20 +183,23 @@ def step(s, seats: dict, rnd, staged: set, humans=(), trace=None, seed=None) -> 
     elif f.get("active"):
         who = [f["active"]]
     else:  # 手番のない段階（準備）：キーパーのアクションをでたらめに、それから各席
-        ka = [m for m in legal_moves(s, "keeper") if "action" in m and ("keeper", m["action"]) not in staged]
+        ka = [m for m in legal_moves(s, "keeper", st=st) if "action" in m and ("keeper", m["action"]) not in staged]
         if ka:
             m = rnd.choice(ka)
             staged.add(("keeper", m["action"]))
             try:
-                _apply(s, "keeper", m)
+                _apply(s, "keeper", m, n0)
                 return "keeper", "keeper", 0
+            except StaleLog:
+                staged.discard(("keeper", m["action"]))
+                return "stale", None, 0
             except OpError:
                 return step(s, seats, rnd, staged, humans, trace, seed)  # 行えなかったアクションは除いた（staged）ので、次を試す
         who = list(s.defn.players)
     refused = 0
     for p in sorted(who, key=lambda x: x in humans):  # 人の席は最後（準備で人が止まる前に、思考ルーチンの席が済ませる）
         v = view(s.defn, st, p)
-        moves = legal_moves(s, p, v)
+        moves = legal_moves(s, p, v, st)
         if not f.get("active") and not st.get("stack"):
             moves = [m for m in moves if "action" in m and (p, m["action"]) not in staged]
         if not moves:
@@ -210,7 +215,9 @@ def step(s, seats: dict, rnd, staged: set, humans=(), trace=None, seed=None) -> 
             if choice is None:
                 break
             try:
-                _apply(s, p, choice)
+                _apply(s, p, choice, n0)
+            except StaleLog:
+                return "stale", p, refused
             except OpError:
                 refused += 1
                 ctx.moves = [m for m in ctx.moves if m != choice]
@@ -224,8 +231,10 @@ def step(s, seats: dict, rnd, staged: set, humans=(), trace=None, seed=None) -> 
                               **({"note": note} if note else {}), **({"margin": margin} if margin is not None else {})})
             return "seat", p, refused
     try:
-        s.apply({"op": "advance", "by": "keeper", "to": "turn" if f.get("active") else "stage"})
+        s.apply({"op": "advance", "by": "keeper", "to": "turn" if f.get("active") else "stage"}, expect=n0)
         return "keeper", "keeper", refused
+    except StaleLog:
+        return "stale", None, refused
     except OpError:
         return "stuck", None, refused
 
@@ -239,7 +248,7 @@ def play_game(path, seats: dict, players: int, seed: int = 0, max_turns: int = 8
     refused = decisions = 0
     staged = set()
     for _ in range(max_turns * 60):
-        if (s.state().get("flow") or {}).get("turn_no", 0) > max_turns:
+        if (s.state(copy_=False).get("flow") or {}).get("turn_no", 0) > max_turns:
             break
         what, _, n = step(s, seats, rnd, staged, trace=trace, seed=seed)
         refused += n
@@ -278,15 +287,29 @@ def bot_step(s, humans=(), bots=None, max_moves: int = 500) -> dict:
         raise OpError(f"定義にない席: {bad}")
     seats = {p: load_policy(b) for p, b in bots.items() if p not in humans}
     rnd = random.Random(f"bot-step:{s.meta['seed']}:{len(s.log())}")
-    staged, applied, who = _staged(s), 0, None
+    staged, applied, who, stale = _staged(s), 0, None, 0
+    n_start = len(s.log())
     while applied < max_moves:
         what, who, _ = step(s, seats, rnd, staged, humans)
+        if what == "stale":  # 画面などが先に書いた：読み直して選び直す（書き続けられたら諦める）
+            stale += 1
+            if stale > 20:
+                break
+            staged = _staged(s)
+            continue
         if what in ("ended", "stuck", "human"):
             break
         applied += 1
     else:
         what = "max"
-    out = {"stopped": what, "active": (s.state().get("flow") or {}).get("active"), "applied": applied}
+    st = s.state(copy_=False)
+    out = {"stopped": what, "active": (st.get("flow") or {}).get("active"), "applied": applied}
+    if len(humans) == 1:  # 人の席に見える形で、いま足した手（だれが何をしたか）
+        from .redact import visible_log
+        out["moves"] = visible_log(s, humans[0])[n_start:]
+    if what == "ended" and st.get("result"):
+        r = st["result"]
+        out["result"] = {"text": r.get("text"), "results": r.get("results"), "standings": r.get("standings")}
     return {**out, "human": who} if what == "human" else out
 
 

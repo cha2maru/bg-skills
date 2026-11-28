@@ -1,6 +1,6 @@
 ---
 name: bg-reproduce
-description: 既存のボードゲーム（市販品・開発中の他人の作品・公開されたルールのある作品）を、資料から生成スクリプトで bg-skills のゲーム定義に再現し、local/ に置いて bg check・bg fuzz・bg selfplay で確かめる。「既存のゲームを再現して」「この作品を定義にして」「公開されているルールから定義を作って」「reproduce an existing game」「port this board game」と言われたときに使う。自分のアイデアから新しく作るのは bg-design、思考ルーチンは bg-ai。
+description: 既存のボードゲーム（市販品・開発中の他人の作品・公開されたルールのある作品）を、資料から生成スクリプトで bg-skills のゲーム定義に再現し、local/ に置いて bg check・bg fuzz・bg selfplay で確かめる。「既存のボードゲームを再現したい」「既存のゲームを再現して」「この作品を定義にして」「ルールブック（説明書）から定義を作って」「公開されているルールから定義を作って」「あのゲームを bg で遊べるようにしたい」「reproduce an existing game」「port this board game」と言われたら、何を再現するか聞く前にまず使う。自分のアイデアから新しく作るのは bg-design、思考ルーチンは bg-ai。
 ---
 
 # bg-reproduce：既存の作品 → 生成スクリプト → 定義

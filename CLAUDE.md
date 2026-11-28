@@ -88,6 +88,8 @@ uv run bg experiments games/mygame/experiments.jsonl --last 5   # 試行の記�
 uv run bg rulebook games/mygame/game.yaml > RULES.md   # 人が読む手引き（詳細ルール・未決の裁定は出さない）
 uv run bg league examples/harvest-road.yaml --bot greedy=examples/bots/harvest-greedy.py --bot random --players 2 --games 20 --trace trace.jsonl  # 思考ルーチンのリーグ戦（席を回す。符号検定。RUL-030）
 uv run bg bot-step sessions/s1 --human P1 --bot P2=examples/bots/harvest-greedy.py   # P1 の番まで、ほかの席を思考ルーチンで進める（目隠しの対戦・人と遊ぶ）
+# スキルが正しい場面で呼ばれるか（evals/trigger-*）。.venv のハードリンクで止まるので、git の管理下のファイルだけを写したフォルダで回す
+# git ls-files -z | grep -zv '^.claude/' | xargs -0 -I{} cp --parents {} <写し>/ && cp -r evals <写し>/ && cd <写し> && claude plugin eval . --ablation none --runs 2 --no-publish
 # check・new・fuzz・selfplay・complexity・status・rulebook は --with 案.yaml（何枚でも）で案を重ねる
 uv run bg rebase sessions/s1                           # 定義を直した後、記録が再生できれば対局を今の定義に合わせる
 uv run bg say sessions/s1 "こんにちは" --by P1 --to P2  # 発言（--to を省くと全員）

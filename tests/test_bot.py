@@ -65,7 +65,8 @@ def test_AC_084_1_bot_step_plays_bot_seat_until_human(tmp_path, capsys):
     s.apply({"op": "advance", "to": "turn", "by": "P1"})
     n = len(s.log())
     out = _cli(capsys, "bot-step", str(s.dir), "--human", "P1", "--bot", f"P2={GREEDY}")
-    assert out == {"stopped": "human", "active": "P1", "applied": 2, "human": "P1"}
+    assert {k: out[k] for k in ("stopped", "active", "applied", "human")} == {"stopped": "human", "active": "P1", "applied": 2, "human": "P1"}
+    assert [o.get("by") for o in out["moves"]] == [o.get("by") for o in s.log()[n:]]  # 人の席に見える形で、足した手
     assert any(o.get("by") == "P2" and o.get("action") == "harvest" for o in s.log()[n:])
 
 
@@ -79,7 +80,7 @@ def test_AC_084_2_human_turn_adds_nothing(tmp_path, capsys):
     assert _cli(capsys, "bot-step", str(b.dir), "--human", "P1")["human"] == "P1"
     acts = [(o["by"], o["action"]) for o in b.log() if "act" in o]
     assert acts[0] == ("keeper", "setup") and any(by == "P2" for by, _ in acts)  # 人の席より先に、思考ルーチンの席が準備を済ませる
-    assert _cli(capsys, "bot-step", str(b.dir), "--human", "P1") == {"stopped": "human", "active": None, "applied": 0, "human": "P1"}
+    assert _cli(capsys, "bot-step", str(b.dir), "--human", "P1") == {"stopped": "human", "active": None, "applied": 0, "human": "P1", "moves": []}
     assert [(o["by"], o["action"]) for o in b.log() if "act" in o] == acts
 
 
@@ -122,3 +123,16 @@ def test_AC_083_2_league_has_win_ci_per_bot():
     for b in out["bots"].values():
         lo, hi = b["win_ci"]
         assert 0 <= lo <= b["win_rate"] <= hi <= 1
+
+
+def test_AC_084_4_stale_log_is_retried_and_moves_are_reported(tmp_path):
+    """画面などが先に書いたら、古い局面で選んだ手は記録しない（StaleLog）。bot-step は読み直して進め、人の席に見える形で足した手を出す。"""
+    from bgskills.bot import _apply, bot_step
+    from bgskills.session import StaleLog
+    s = Session.create(tmp_path / "h", EX / "harvest-road.yaml", 2, {}, 1, strict=True)
+    n = len(s.log())
+    with pytest.raises(StaleLog):
+        _apply(s, "keeper", {"action": "setup", "args": {}}, n + 1)
+    assert len(s.log()) == n
+    out = bot_step(s, ["P1"], {"P2": str(EX / "bots" / "harvest-greedy.py")})
+    assert out["stopped"] == "human" and out["moves"] and len(out["moves"]) == len(s.log()) - n

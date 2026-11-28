@@ -22,6 +22,7 @@
 from __future__ import annotations
 
 import ast
+import functools
 
 from .definition import Definition
 
@@ -201,19 +202,26 @@ def problems(src: str, known: set) -> str | None:
     return f"知らない関数: {', '.join(bad)}" if bad else None
 
 
-def evaluate(src, d: Definition, state: dict, env: dict | None = None, ctx: dict | None = None):
-    """式を評価する。src が文字列でなければそのまま返す。"""
-    if not isinstance(src, str):
-        return src
+@functools.lru_cache(maxsize=4096)
+def _compiled(src: str):
+    """式を読み、書き方を確かめてコンパイルする（同じ式は 1 回だけ）。"""
     try:
         tree = ast.parse(src, mode="eval")
     except SyntaxError as e:
         raise ExprError(f"式が読めない: {src}（{e.msg}）") from None
     _check(tree)
+    return compile(tree, "<expr>", "eval")
+
+
+def evaluate(src, d: Definition, state: dict, env: dict | None = None, ctx: dict | None = None):
+    """式を評価する。src が文字列でなければそのまま返す。"""
+    if not isinstance(src, str):
+        return src
+    code = _compiled(src)
     names = {**(ctx or context(d, state)), **(env or {})}
     try:
         # 内包表記の中からも見えるように、名前は globals に置く（関数と名前を限った式だけ）
-        return eval(compile(tree, "<expr>", "eval"), {"__builtins__": {}, **names})  # noqa: S307
+        return eval(code, {"__builtins__": {}, **names})  # noqa: S307
     except ExprError:
         raise
     except Exception as e:  # noqa: BLE001

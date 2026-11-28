@@ -81,7 +81,7 @@ bg playstats sessions/s1                        # 対局の物差し：拒否さ
 bg league examples/harvest-road.yaml --bot greedy=examples/bots/harvest-greedy.py --bot random --players 2 --games 20 --trace trace.jsonl   # リーグ戦（席を回す。符号検定）
 ```
 
-- `bg bot-step sessions/s1 --human P1 --bot P2=bots/greedy.py`：P1 の番が来るか対局が終わるまで、ほかの席を思考ルーチンが進める（`--bot P3=random`、`--max N`。印のない席はでたらめ）。P1 は画面か `bg act` で指し、指したらまた bot-step。
+- `bg bot-step sessions/s1 --human P1 --bot P2=bots/greedy.py`：P1 の番が来るか対局が終わるまで、ほかの席を思考ルーチンが進める（`--bot P3=random`、`--max N`。印のない席はでたらめ）。P1 は画面か `bg act` で指し、手番を終えたら（行えるアクションが残っていなければ `bg advance --to turn --by P1`）また bot-step。出力：止まった理由（human・ended・stuck・max）、足した手の数、人の席が 1 つなら足した手（`moves`。その席に見える形）、終わったら `result`。画面と同時に書いても、古い局面で選んだ手は記録しない。
 
 ## 手引きと書き出し
 
