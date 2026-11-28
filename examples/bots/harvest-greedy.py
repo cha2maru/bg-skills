@@ -26,6 +26,9 @@ def choose(ctx):
         after = {**fields, me: mine + [c]}
         new_set = sets(mine + [c]) > sets(mine)
         new_lead = lead(after, c, me) and not lead(fields, c, me)
-        scored.append(((new_set, new_lead, v, ctx.rnd.random()), m, f"組{int(new_set)}・一番{int(new_lead)}・数{v}"))
-    best = max(scored, key=lambda x: x[0])
-    return best[1], best[2]
+        scored.append((100 * new_set + 10 * new_lead + v, ctx.rnd.random(), m, f"組{int(new_set)}・一番{int(new_lead)}・数{v}"))
+    scored.sort(key=lambda x: x[:2], reverse=True)  # 段で比べる（組 ＞ 一番 ＞ 数）。同点はくじ
+    best = scored[0]
+    if len(scored) < 2:
+        return best[2], best[3]
+    return best[2], best[3], best[0] - scored[1][0]  # 2 番目との差。0 はくじで決めた（迷った局面）

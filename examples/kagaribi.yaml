@@ -107,6 +107,7 @@ progress:
 
 actions:                             # ルールに結びついた操作の手順。合法かどうかは判定しない（いつ行えるかは when の文）
   - id: setup
+    by: [keeper]
     name: 準備する（箱から）
     rule: R1
     when: 対局の初めに 1 回。箱から始めた対局で使う。

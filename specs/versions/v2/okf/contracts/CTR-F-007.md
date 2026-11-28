@@ -53,5 +53,5 @@ implementation: []
 | variants | 重ねた案の名前の並び（元だけなら空） |
 | players・games・seed・max_turns | 回した条件 |
 | tool | selfplay・compare・league（league の result は方針ごとの結果と paired） |
-| result | 結果（終わり方ごとの数、平均の手番数） |
+| result | 結果（終わり方ごとの数、平均の手番数。席ごと・方針ごとの win_rate と win_ci（Wilson の 95% の幅 [下, 上]。SPC-083 より前の記録には無い）） |
 | note | 利用者の書き添え（`--note`） |

@@ -65,3 +65,4 @@
 - CTR-F-002 を r2 に改版（案の写し variant-<n>.yaml を追加。追加だけ）。参照の rev を 2 に揃えた。第二版を実装した（SPC-071〜077。bg init・status・compare・experiments・rulebook、--with・--record、スキル bg-start・bg-iterate）。selfplay は席ごとの勝ちの割合を出し、auto_end の定義では結果が記録されるまで進める（以前は巡の終わりを待たずに打ち切っていた）。
 - RUL-029 を記録し、WSH-019・REQ-032・SPC-078 を起こした。CTR-F-001 を r7 に改版（terms の avoid・first を追加。追加だけ）し、参照の rev を 7 に揃えた。
 - RUL-030 を記録し、WSH-020・REQ-033・SPC-079〜080 を起こした。CTR-F-007 を r2 に改版（思考ルーチンを追加。追加だけ）し、参照の rev を 2 に揃えた。
+- RUL-031 を記録し、WSH-021〜024・REQ-034〜037・SPC-081〜086 を起こした（推奨で決めた。RUL-018）。

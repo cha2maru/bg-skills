@@ -3,6 +3,16 @@
 from __future__ import annotations
 
 
+def wilson(k: int, n: int) -> list[float]:
+    """勝ちの割合 k/n の 95% の幅（Wilson）。[下, 上]。n=0 なら [0, 1]。"""
+    if n <= 0:
+        return [0.0, 1.0]
+    z, p = 1.96, k / n
+    mid, half = (p + z * z / (2 * n)), z * ((p * (1 - p) / n + z * z / (4 * n * n)) ** 0.5)
+    d = 1 + z * z / n
+    return [round(max(0.0, (mid - half) / d), 3), round(min(1.0, (mid + half) / d), 3)]
+
+
 def choose_args(s, rnd, action: dict, actor: str, prefer=lambda c: not c["problems"], fallback: bool = True) -> dict:
     """アクションの引数をでたらめに選ぶ（fuzz・selfplay・quiz で共通）。prefer を満たす候補から選び、無ければ fallback なら
     どの候補でも。先頭を選ぶ引数（pick: first）は、エンジンと同じく条件を満たす最初の候補にする（後の引数の条件が読むため）。
@@ -191,6 +201,7 @@ def selfplay(path, players: int, games: int = 20, max_turns: int = 60, seed: int
     if seats:
         out["seats"] = {p: dict(c) for p, c in seats.items()}
         out["win_rate"] = {p: round(c.get("win", 0) / games, 2) for p, c in seats.items()}
+        out["win_ci"] = {p: wilson(c.get("win", 0), games) for p, c in seats.items()}  # 偶然の範囲かを読む（SPC-083）
     return out
 
 

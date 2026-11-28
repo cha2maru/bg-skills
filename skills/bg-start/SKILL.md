@@ -5,7 +5,7 @@ description: bg-skills のプラグインを入れた後に、自作のボード
 
 # bg-start：入れてから最初の 1 局まで
 
-> **どこで使っても**：`bg` はプラグインが PATH に入れるコマンド（このリポジトリの中なら `uv run bg`）。作業場は利用者のプロジェクトに作る（プラグインのフォルダには作らない）。形式の説明は `<プラグインのルート>/specs/versions/v2/okf/contracts/CTR-F-001.md`、作業場の形は同じフォルダの `CTR-F-007.md`（プラグインのルートは、このスキルのディレクトリから 2 つ上）。
+> **どこで使っても**：`bg` はプラグインが PATH に入れるコマンド（このリポジトリの中なら `uv run bg`）。作業場は利用者のプロジェクトに作る（プラグインのフォルダには作らない）。形式の説明は `<プラグインのルート>/specs/versions/v2/okf/contracts/CTR-F-001.md`、作業場の形は同じフォルダの `CTR-F-007.md`、コマンドの一覧は `<プラグインのルート>/docs/commands.md`（プラグインのルートは、このスキルのディレクトリから 2 つ上）。
 
 ## 手順
 
@@ -19,7 +19,7 @@ description: bg-skills のプラグインを入れた後に、自作のボード
    ```
 4. **アイデアを聞く**：一言の概要、人数、部品（カード・駒・盤）、手番に何をするか、どう終わり誰が勝つか。決まっていないことは決まっていないままでよい（無理に決めない）。
 5. **bg-design に渡す**：聞いたことを bg-design の手順で `game.yaml` に起こす。決まっていない点は `game.open_questions` と、`rulings` の `status: open`（問いだけ）に残す。決まった所だけを機械の層（アクション・進行・終わり）にする。
-6. **最初の 1 局**：`bg check`・`bg fuzz` を通し、`bg selfplay` で終わりまで進むかを見る。人の目で見るなら `bg new sessions/s1 --def game.yaml --players 2` と `bg serve sessions/s1 --host 127.0.0.1`（認証が無いので外に公開しない）。仲間に渡す手引きは `bg rulebook game.yaml > RULES.md`。
+6. **最初の 1 局**：`bg check`・`bg fuzz` を通し、`bg selfplay` で終わりまで進むかを見る。人の目で見るなら `bg new sessions/s1 --def game.yaml --players 2` と `bg serve sessions/s1 --host 127.0.0.1`（認証が無いので外に公開しない）。人と遊ぶなら、画面の「見る立場」を自分の席にする。ほかの席は、`bg bot-step` で思考ルーチンに指させられる。仲間に渡す手引きは `bg rulebook game.yaml > RULES.md`。
 7. **次へ**：改訂を始めるなら bg-iterate。エージェントに遊ばせるなら bg-playtest。
 
 ## 報告

@@ -45,6 +45,7 @@ objects:
 
 actions:
   - id: setup
+    by: [keeper]
     name: 中央に 4 つ置く
     rule: R1
     when: 対局の初めに 1 回。

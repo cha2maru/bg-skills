@@ -44,6 +44,7 @@ uv run bg check examples/tic-tac-toe.yaml
 | `bg-balance` | 多数局で勝率・局の長さを測り、数値を 1 つずつ変えて比べる |
 | `bg-rules-audit` | ルールの文と定義の食い違い・穴を洗い出す |
 | `bg-hidden-info-audit` | 隠れた情報が出力から漏れないかをチェック表で確かめる |
+| `bg-reproduce` | 既存作品の再現（local/ に置き、公開しない） |
 
 `bg` コマンドの例：
 
@@ -56,7 +57,7 @@ bg serve sessions/s1 --host 127.0.0.1                 # 卓の画面（認証な
 bg selfplay examples/rune-clash.yaml --players 2 --games 30
 ```
 
-コマンドの全体は [CLAUDE.md](CLAUDE.md) の「コマンド」の節、定義の形式は `specs/versions/v2/okf/contracts/CTR-F-001.md` と `bg schema`、手本の定義は `examples/`（三目並べ・オセロ・チェス・将棋・麻雀・人狼・架空のカードゲームなど）。
+コマンドの全体は [docs/commands.md](docs/commands.md)、定義の形式は `specs/versions/v2/okf/contracts/CTR-F-001.md` と `bg schema`、手本の定義は `examples/`（三目並べ・オセロ・チェス・将棋・麻雀・人狼・架空のカードゲームなど）。
 
 ## 開発
 

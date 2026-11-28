@@ -129,6 +129,7 @@ actions:
   - id: setup
     name: 準備する
     rule: R1
+    by: [keeper]  # 準備は 1 回（R1）。書かないと、手番のない段階で各席も準備を行える
     steps:
       - {op: shuffle, area: deck}
       - {op: move, obj: "top:deck", to: market, times: 4}

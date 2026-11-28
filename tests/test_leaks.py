@@ -2,6 +2,7 @@
 そのプレイヤーに一度も見えたことのない部品の ID が出ないこと。出口（コマンド）を足したら、ここに足す。"""
 import random
 import re
+import shutil
 from pathlib import Path
 
 import pytest
@@ -69,6 +70,14 @@ def test_no_never_seen_part_ids_in_player_outputs(tmp_path, capsys, game, player
         for name, out in outs.items():
             found = {m.group(0) for m in token.finditer(out.out + out.err)} & never
             assert not found, f"{game} {p} の {name} に、見えたことのない部品 {sorted(found)[:5]}"
+    for p in s.defn.players:  # bot-step は対局を進めるので写しで。人の席（p）に出す出力に、その時点まで見えたことのない部品が出ない
+        c = tmp_path / f"bot-{p}"
+        shutil.copytree(s.dir, c)
+        capsys.readouterr()
+        main(["bot-step", str(c), "--human", p, "--max", "20"])
+        out = capsys.readouterr()
+        found = {m.group(0) for m in token.finditer(out.out + out.err)} & (distinct - _ever_seen(Session(c), p))
+        assert not found, f"{game} {p} の bot-step に、見えたことのない部品 {sorted(found)[:5]}"
 
 
 def test_server_log_is_redacted_for_viewer(tmp_path):

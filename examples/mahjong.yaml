@@ -91,6 +91,7 @@ objects:
 
 actions:
   - id: setup
+    by: [keeper]
     name: 局の準備（洗牌・配牌・ドラ表示）
     rule: R1
     when: 局の初めに 1 回。

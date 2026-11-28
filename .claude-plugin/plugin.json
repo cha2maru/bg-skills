@@ -1,6 +1,6 @@
 {
   "name": "bg-skills",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "ボードゲームの定義（YAML）を作り、エージェントに席ごとに遊ばせ、多数局でバランスを測るスキルと bg コマンド一式",
   "author": {
     "name": "cha2maru"

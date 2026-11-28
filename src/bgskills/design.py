@@ -207,6 +207,7 @@ def experiments(log, last: int | None = None) -> list[dict]:
         out.append({"time": r.get("time"), "version": r.get("version"), "variants": r.get("variants") or ["(元)"],
                     "games": r.get("games"), "players": r.get("players"), "avg_turns": res.get("avg_turns"),
                     **({"win_rate": res["win_rate"]} if res.get("win_rate") else {}),
+                    **({"win_ci": res["win_ci"]} if res.get("win_ci") else {}),
                     "undecided_rate": res.get("undecided_rate"), "top_outcomes": dict(top), **({"note": r["note"]} if r.get("note") else {})})
     return out
 

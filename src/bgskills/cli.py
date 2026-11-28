@@ -207,6 +207,11 @@ def main(argv=None):
     c.add_argument("--record", help="試行の記録（experiments.jsonl）に 1 行足す")
     c.add_argument("--note", help="試行の記録への書き添え")
     c.add_argument("--trace", help="判断の記録（1 行 1 手）を書き出す")
+    c = sub.add_parser("bot-step", help="人か Claude の席の番が来るか対局が終わるまで、ほかの席を思考ルーチンで進める（記録に足す。SPC-084）")
+    c.add_argument("session")
+    c.add_argument("--human", action="append", default=[], help="人か Claude が遊ぶ席（何度でも）。この席の番が来たら止まる")
+    c.add_argument("--bot", action="append", default=[], help="席=ファイル（choose(ctx) を持つ Python）か 席=random。書かない席はでたらめ")
+    c.add_argument("--max", type=int, default=500, help="足す手の上限（キーパーの準備・進行も 1 手と数える）")
     c = sub.add_parser("experiments", help="試行の記録を新しい順に出す")
     c.add_argument("log")
     c.add_argument("--last", type=int)
@@ -468,6 +473,10 @@ def main(argv=None):
             if a.trace:
                 Path(a.trace).write_text("".join(json.dumps(t, ensure_ascii=False) + "\n" for t in tr), encoding="utf-8")
             _out(r)
+        elif a.cmd == "bot-step":
+            from .bot import bot_step
+            bots = dict(x.split("=", 1) if "=" in x else (x, "random") for x in a.bot)
+            _out(bot_step(Session(a.session), a.human, bots, a.max))
         elif a.cmd == "experiments":
             from .design import experiments
             _out(experiments(a.log, a.last))

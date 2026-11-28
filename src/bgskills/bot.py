@@ -2,9 +2,10 @@
 
 sangeki の流れにならう：ルールの処理はエンジン、判断は差し替えられる思考ルーチン。思考ルーチンは Python のファイル
 （bots/<名前>.py）に `choose(ctx)` を書き、ctx.moves（今行える手）から 1 つを返す。ctx には、その席の見え方（ctx.view）と、
-見えている部品の定義の値（ctx.part）だけを渡す。局面そのもの（隠れた情報）は渡さない。
+見えている部品の定義の値（ctx.part）と、その席に見える記録（ctx.log）だけを渡す。局面そのもの（隠れた情報）は渡さない。
 
     bg league <定義> --bot greedy=bots/greedy.py --bot random --players 2 --games 20 [--record experiments.jsonl] [--trace trace.jsonl]
+    bg bot-step <対局> --human P1 --bot P2=bots/greedy.py [--max N]   # 人（Claude）の席の番まで、ほかの席を進める
 """
 from __future__ import annotations
 
@@ -14,6 +15,7 @@ import math
 import random
 import tempfile
 from collections import Counter
+from functools import cached_property
 from pathlib import Path
 
 MAX_MOVES = 400  # 1 つの局面で並べる手の上限（引数の組み合わせが多い作品の保険）
@@ -50,6 +52,12 @@ class Ctx:
         if isinstance(v.get("shown"), dict) and "count" in v["shown"] and not kind:
             n = v["shown"]["count"]
         return n
+
+    @cached_property
+    def log(self) -> list:
+        """記録を、この席に見える形で（bg log --as と同じく伏せる。読んだときに 1 回だけ作る）。"""
+        from .redact import visible_log
+        return visible_log(self._s, self.player)
 
     def find(self, action=None, **args) -> list:
         """条件に合う手（action と引数の値で絞る）。"""
@@ -154,82 +162,132 @@ def _apply(s, player, m):
         s.apply({"op": "pass", "by": player})
 
 
+def step(s, seats: dict, rnd, staged: set, humans=(), trace=None, seed=None) -> tuple:
+    """1 手：今動く人（解決待ちがあれば応じる人、手番の人、手番のない段階ではキーパーのアクション、それから各席）が選んで行う。
+    だれも動けなければキーパーが進行を進める。seats は {席: 方針}（無い席はでたらめ）。staged は手番のない段階で行った
+    （行う人, アクション）で、ここで足す。返すのは (起きたこと, 席, 断られた手の数)。起きたことは ended・stuck・
+    human（humans の席の番。何もしない）・seat（席が 1 手行った）・keeper（キーパーが準備のアクションか進行を行った）。"""
+    from .session import OpError, _stack_next
+    from .view import view
+    st = s.state()
+    f = st.get("flow") or {}
+    if st.get("result") is not None or (f and not f.get("stage")):
+        return "ended", None, 0
+    if not f.get("stage"):
+        return "stuck", None, 0
+    if st.get("stack"):
+        nxt = _stack_next(s.defn, st)["by"]
+        who = [p for p in s.defn.players if p != nxt and p not in (st.get("stack_passes") or [])]
+    elif f.get("active"):
+        who = [f["active"]]
+    else:  # 手番のない段階（準備）：キーパーのアクションをでたらめに、それから各席
+        ka = [m for m in legal_moves(s, "keeper") if "action" in m and ("keeper", m["action"]) not in staged]
+        if ka:
+            m = rnd.choice(ka)
+            staged.add(("keeper", m["action"]))
+            try:
+                _apply(s, "keeper", m)
+                return "keeper", "keeper", 0
+            except OpError:
+                return step(s, seats, rnd, staged, humans, trace, seed)  # 行えなかったアクションは除いた（staged）ので、次を試す
+        who = list(s.defn.players)
+    refused = 0
+    for p in sorted(who, key=lambda x: x in humans):  # 人の席は最後（準備で人が止まる前に、思考ルーチンの席が済ませる）
+        v = view(s.defn, st, p)
+        moves = legal_moves(s, p, v)
+        if not f.get("active") and not st.get("stack"):
+            moves = [m for m in moves if "action" in m and (p, m["action"]) not in staged]
+        if not moves:
+            continue
+        if p in humans:
+            return "human", p, refused
+        ctx = Ctx(s, p, v, moves, rnd)
+        for _ in range(5):  # 断られたら、その手を除いて選び直す
+            choice = (seats.get(p) or random_policy)(ctx)
+            note = margin = None
+            if isinstance(choice, tuple):  # (手, 理由) か (手, 理由, 1 番目と 2 番目の差)
+                choice, note, margin = (*choice, None, None)[:3]
+            if choice is None:
+                break
+            try:
+                _apply(s, p, choice)
+            except OpError:
+                refused += 1
+                ctx.moves = [m for m in ctx.moves if m != choice]
+                if not ctx.moves:
+                    break
+                continue
+            if not f.get("active") and "action" in choice:
+                staged.add((p, choice["action"]))
+            if trace is not None:
+                trace.append({"seed": seed, "turn": f.get("turn_no"), "player": p, "n_moves": len(moves), "move": choice,
+                              **({"note": note} if note else {}), **({"margin": margin} if margin is not None else {})})
+            return "seat", p, refused
+    try:
+        s.apply({"op": "advance", "by": "keeper", "to": "turn" if f.get("active") else "stage"})
+        return "keeper", "keeper", refused
+    except OpError:
+        return "stuck", None, refused
+
+
 def play_game(path, seats: dict, players: int, seed: int = 0, max_turns: int = 80, variants=None, trace=None) -> dict:
     """1 局：seats は {席: 方針（choose）}。手番の人（解決待ちがあれば応じる人、手番のない段階ではキーパーと各席）が選ぶ。
     キーパーだけが行うアクション（準備など）はでたらめに行う。返すのは結果（席ごとの勝ち負け・得点の順位）と、断られた手の数。"""
-    from .session import OpError, Session, _stack_next
-    from .view import view
+    from .session import Session
     s = Session.create(Path(tempfile.mkdtemp()) / "s", path, players, {}, seed, strict=True, variants=variants)
     rnd = random.Random(f"bot:{seed}")
-    refused, steps, decisions = 0, 0, 0
+    refused = decisions = 0
     staged = set()
-    while steps < max_turns * 60:
-        steps += 1
-        st = s.state()
-        if st.get("result") is not None:
+    for _ in range(max_turns * 60):
+        if (s.state().get("flow") or {}).get("turn_no", 0) > max_turns:
             break
-        f = st.get("flow") or {}
-        if not f.get("stage") or f.get("turn_no", 0) > max_turns:
+        what, _, n = step(s, seats, rnd, staged, trace=trace, seed=seed)
+        refused += n
+        decisions += what == "seat"
+        if what in ("ended", "stuck"):
             break
-        if st.get("stack"):
-            nxt = _stack_next(s.defn, st)["by"]
-            who = [p for p in s.defn.players if p != nxt and p not in (st.get("stack_passes") or [])]
-        elif f.get("active"):
-            who = [f["active"]]
-        else:  # 手番のない段階（準備）：キーパーのアクションをでたらめに、それから各席
-            ka = [m for m in legal_moves(s, "keeper") if "action" in m and ("keeper", m["action"]) not in staged]
-            if ka:
-                m = rnd.choice(ka)
-                try:
-                    _apply(s, "keeper", m)
-                    staged.add(("keeper", m["action"]))
-                    continue
-                except OpError:
-                    staged.add(("keeper", m["action"]))
-                    continue
-            who = list(s.defn.players)
-        moved = False
-        for p in who:
-            v = view(s.defn, st, p)
-            moves = legal_moves(s, p, v)
-            if not f.get("active") and not st.get("stack"):
-                moves = [m for m in moves if "action" in m and (p, m["action"]) not in staged]
-            if not moves:
-                continue
-            ctx = Ctx(s, p, v, moves, rnd)
-            for _ in range(5):  # 断られたら、その手を除いて選び直す
-                choice = seats[p](ctx) if p in seats else random_policy(ctx)
-                note = None
-                if isinstance(choice, tuple):
-                    choice, note = choice
-                if choice is None:
-                    break
-                try:
-                    _apply(s, p, choice)
-                    decisions += 1
-                    moved = True
-                    if not f.get("active") and "action" in choice:
-                        staged.add((p, choice["action"]))
-                    if trace is not None:
-                        trace.append({"seed": seed, "turn": f.get("turn_no"), "player": p, "n_moves": len(moves), "move": choice,
-                                      **({"note": note} if note else {})})
-                    break
-                except OpError:
-                    refused += 1
-                    ctx.moves = [m for m in ctx.moves if m != choice]
-                    if not ctx.moves:
-                        break
-            if moved:
-                break
-        if not moved:
-            try:
-                s.apply({"op": "advance", "by": "keeper", "to": "turn" if f.get("active") else "stage"})
-            except OpError:
-                break
     st = s.state()
     r = st.get("result") or {}
     return {"seed": seed, "turns": (st.get("flow") or {}).get("turn_no", 0), "end": r.get("text") or ("打ち切り" if not r else ""),
             "results": r.get("results") or {}, "standings": r.get("standings") or [], "refused": refused, "decisions": decisions}
+
+
+def _staged(s) -> set:
+    """今の手番のない段階のうちに行った（行う人, アクション）。記録から作る（bot-step を何度呼んでも、準備を繰り返さない）。"""
+    from .session import apply_op, initial_state
+
+    def key(st):
+        f = st.get("flow") or {}
+        return f.get("stage_index"), f.get("cycle"), f.get("turn_no")
+    st, done = initial_state(s.defn, s.meta.get("start") == "box"), {}
+    for i, o in enumerate(s.log(), 1):
+        if o.get("action"):
+            done.setdefault(key(st), set()).add((o.get("by"), o["action"]))
+        st = apply_op(s.defn, st, o, s.meta["seed"], i)
+    return done.get(key(st), set())
+
+
+def bot_step(s, humans=(), bots=None, max_moves: int = 500) -> dict:
+    """bg bot-step（SPC-084）：humans の席の番が来るか、終わるか、だれも動けないか、max_moves 手を足すまで、ほかの席
+    （bots に書かない席はでたらめ）とキーパーの準備を進める。手は通常の操作で記録に足す（画面にもそのまま出る）。
+    出すのは止まった理由と手番の人と足した数だけ（どの手を指したかは bg log --as で、その席に見える形で読む）。"""
+    from .session import OpError
+    bots = bots or {}
+    bad = sorted((set(humans) | set(bots)) - set(s.defn.players))
+    if bad:
+        raise OpError(f"定義にない席: {bad}")
+    seats = {p: load_policy(b) for p, b in bots.items() if p not in humans}
+    rnd = random.Random(f"bot-step:{s.meta['seed']}:{len(s.log())}")
+    staged, applied, who = _staged(s), 0, None
+    while applied < max_moves:
+        what, who, _ = step(s, seats, rnd, staged, humans)
+        if what in ("ended", "stuck", "human"):
+            break
+        applied += 1
+    else:
+        what = "max"
+    out = {"stopped": what, "active": (s.state().get("flow") or {}).get("active"), "applied": applied}
+    return {**out, "human": who} if what == "human" else out
 
 
 def sign_test(a: int, b: int) -> float:
@@ -243,6 +301,7 @@ def sign_test(a: int, b: int) -> float:
 def league(path, bots: dict, players: int, games: int = 10, seed: int = 0, max_turns: int = 80, variants=None, trace=None) -> dict:
     """リーグ戦：方針を席に回して割り当て（席の有利を打ち消す）、同じ種で多数局。方針ごとの勝ちの割合・平均の順位・席ごとの勝ちと、
     方針が 2 つなら、同じ種の対局どうしを比べた符号検定（どちらが多く勝ったか）を出す。"""
+    from .sim import wilson
     names = list(bots)
     pol = {n: load_policy(b) for n, b in bots.items()}
     seats = None
@@ -276,7 +335,8 @@ def league(path, bots: dict, players: int, games: int = 10, seed: int = 0, max_t
     total = games * len(names)
     for n in names:
         seats_played = sum(stat[n].values())
-        out["bots"][n] = {"win_rate": round(stat[n].get("win", 0) / max(1, seats_played), 3), "results": dict(stat[n]),
+        out["bots"][n] = {"win_rate": round(stat[n].get("win", 0) / max(1, seats_played), 3),
+                          "win_ci": wilson(stat[n].get("win", 0), seats_played), "results": dict(stat[n]),
                           "mean_rank": round(sum(ranks[n]) / max(1, len(ranks[n])), 2) if ranks[n] else None,
                           "wins_by_seat": dict(seat_win[n])}
     if len(names) == 2:

@@ -83,6 +83,12 @@
 - [SPC-078 ライブラリは、用語の使わない言葉が人の読む文に出たら知らせ、手引きでは用語の初出を決めた表記にする](/specifications/SPC-078.md)
 - [SPC-079 ライブラリは、今行える手の一覧と、その席の見え方だけを思考ルーチンに渡し、1 局を最後まで進める](/specifications/SPC-079.md)
 - [SPC-080 コマンドは、思考ルーチンを席に回して多数局を戦わせ、方針ごとの勝ちの割合・平均の順位・席ごとの勝ちと、対の比較の符号検定を出す](/specifications/SPC-080.md)
+- [SPC-081 スキルは、配られるファイル（利用者向けのコマンドの手引き docs/commands.md など）だけを指し、今の方針どおりに書かれ、似たスキルとの使い分けを描述文に持つ](/specifications/SPC-081.md)
+- [SPC-082 試験は、スキルの中の bg のコマンド例が、今の bg のサブコマンドと引数に合うかを確かめる](/specifications/SPC-082.md)
+- [SPC-083 コマンドは、selfplay・compare・league の結果に、席ごと（league は方針ごと）の勝ちの割合の 95% の幅を出し、bg-balance はその流れで比べる](/specifications/SPC-083.md)
+- [SPC-084 コマンドは、bg bot-step で、指定した席（人・Claude）の番が来るか対局が終わるまで、ほかの席を思考ルーチンで進める](/specifications/SPC-084.md)
+- [SPC-085 ライブラリは、思考ルーチンが手ごとの点数を返したとき、判断の記録に 1 番目と 2 番目の差を残し、思考ルーチンに、その席に見える記録を渡す](/specifications/SPC-085.md)
+- [SPC-086 スキル bg-reproduce は、既存作品の再現を、生成スクリプト・local/・出典・裁定の順で案内する](/specifications/SPC-086.md)
 
 ## 非機能要件
 

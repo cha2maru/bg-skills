@@ -1,11 +1,11 @@
 ---
 name: bg-iterate
-description: 自作のボードゲームの定義を、回しながら改訂する 1 周（設計の状態を見る → 案を作る → 元と比べる → 試行を記録する → 取り込むか決めて版を上げ日誌に書く）を進める。「ルールを変えて試したい」「この数値はどっちがいい？」「改訂して」「シミュレーションしながら調整したい」と言われたとき、ルールがまだ固まっていない段階で使う。作業場は bg-start（bg init）で作ったもの。勝率の細かい調整は bg-balance、エージェントの試し遊びは bg-playtest。
+description: 自作のボードゲームの定義を、回しながら改訂する 1 周（設計の状態を見る → 案を作る → 元と比べる → 試行を記録する → 取り込むか決めて版を上げ日誌に書く）を進める。「ルールを変えて試したい」「この数値はどっちがいい？」「改訂して」「シミュレーションしながら調整したい」「iterate on my game」「try a rule change」「compare two versions of my rules」と言われたとき、ルールがまだ固まっていない段階で使う。作業場は bg-start（bg init）で作ったもの。ルールがおおむね固まり数値を詰める段階は bg-balance、強い手で比べるための思考ルーチンを作るのは bg-ai、エージェントの試し遊びは bg-playtest。
 ---
 
 # bg-iterate：回しながら改訂する 1 周
 
-> **どこで使っても**：`bg` はプラグインが PATH に入れるコマンド（このリポジトリの中なら `uv run bg`）。案の重ね方と試行の記録の形は `<プラグインのルート>/specs/versions/v2/okf/contracts/CTR-F-007.md`。
+> **どこで使っても**：`bg` はプラグインが PATH に入れるコマンド（このリポジトリの中なら `uv run bg`）。案の重ね方と試行の記録の形は `<プラグインのルート>/specs/versions/v2/okf/contracts/CTR-F-007.md`。コマンドの一覧は `<プラグインのルート>/docs/commands.md`。
 
 ## 1 周の手順
 
@@ -28,7 +28,7 @@ description: 自作のボードゲームの定義を、回しながら改訂す�
    - 決まった点は裁定（rulings）を decided にし、open_questions から消す。
    - 古い対局を続けるなら `bg rebase sessions/<対局>`（再生できなければ作り直す）。
    - 案のファイルは消すか、`variants/old/` に移す。
-6. **次の 1 周へ**：`bg status` に戻る。人と遊んで確かめたくなったら `bg rulebook game.yaml > RULES.md` と `bg serve`。エージェントに遊ばせて穴を拾うなら bg-playtest。
+6. **次の 1 周へ**：`bg status` に戻る。人と遊んで確かめたくなったら `bg rulebook game.yaml > RULES.md` と `bg serve`（画面の「見る立場」を自分の席にする。ほかの席は、`bg bot-step` で思考ルーチンに指させられる）。エージェントに遊ばせて穴を拾うなら bg-playtest。
 
 ## 報告
 

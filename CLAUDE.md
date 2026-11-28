@@ -45,6 +45,8 @@ Claude Code のプラグインとして配る（RUL-021。`.claude-plugin/`、`b
 
 自作のゲームを始めるとき：`bg-start`（`bg init` で作業場 → 最初の 1 局）。改訂の 1 周：`bg-iterate`（`bg status` → 案 `variants/*.yaml` → `bg compare --record` → 取り込んで版を上げ `journal.md`。第二版、RUL-028・CTR-F-007）。思考ルーチン：`bg-ai`（考える順番を `bots/<名前>.md` に書き、`choose(ctx)` の `bots/<名前>.py` にして `bg league` で測る。思考ルーチンは合法手とその席の見え方だけを受け取る。sangeki の流れ、RUL-030）。新しいゲームを作るとき：`bg-design`（アイデア → 定義、bg check・bg fuzz まで）→ `bg-playtest`（エージェントに席ごとに遊ばせる）→ `bg-balance`（多数局で測り、数値を 1 つずつ変えて比べる）。点検：`bg-hidden-info-audit`（隠れた情報の漏れのチェック表）、`bg-rules-audit`（ルール文と定義の突き合わせ）。
 
+利用者向けのコマンドの手引きは `docs/commands.md`（スキルはこれを指す。プラグインでは CLAUDE.md は読まれない）。下の「コマンド」の節を変えたら、開発者向けの例・local/ を除いて手引きもそろえる。
+
 ## 仕様と記録
 
 - `specs/versions/v2/okf/`：okf-specs のバンドル（裁定 RUL、要望 WSH、要求 REQ、要件 SPC）。チェック：`python3 <okf-spec>/tools/okf_check.py specs/versions/v2/okf`
@@ -85,6 +87,7 @@ uv run bg status games/mygame/game.yaml --experiments games/mygame/experiments.j
 uv run bg experiments games/mygame/experiments.jsonl --last 5   # 試行の記録（新しい順）
 uv run bg rulebook games/mygame/game.yaml > RULES.md   # 人が読む手引き（詳細ルール・未決の裁定は出さない）
 uv run bg league examples/harvest-road.yaml --bot greedy=examples/bots/harvest-greedy.py --bot random --players 2 --games 20 --trace trace.jsonl  # 思考ルーチンのリーグ戦（席を回す。符号検定。RUL-030）
+uv run bg bot-step sessions/s1 --human P1 --bot P2=examples/bots/harvest-greedy.py   # P1 の番まで、ほかの席を思考ルーチンで進める（目隠しの対戦・人と遊ぶ）
 # check・new・fuzz・selfplay・complexity・status・rulebook は --with 案.yaml（何枚でも）で案を重ねる
 uv run bg rebase sessions/s1                           # 定義を直した後、記録が再生できれば対局を今の定義に合わせる
 uv run bg say sessions/s1 "こんにちは" --by P1 --to P2  # 発言（--to を省くと全員）
